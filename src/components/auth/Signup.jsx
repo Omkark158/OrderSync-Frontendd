@@ -1,28 +1,24 @@
-// ============================================
-// 2. Signup.jsx - User Signup Component
-// ============================================
+// src/components/auth/Signup.jsx
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, Phone, ArrowRight } from 'lucide-react';
-import OTPVerification from '../auth/OTPVerification';
+import OTPVerification from './OTPVerification';
+import { toast } from 'react-hot-toast';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const Signup = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-  });
+  const [formData, setFormData] = useState({ name: '', phone: '' });
   const [loading, setLoading] = useState(false);
   const [showOTP, setShowOTP] = useState(false);
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
     if (name === 'phone') {
-      // Only allow digits and limit to 10
-      const cleanedValue = value.replace(/\D/g, '').slice(0, 10);
-      setFormData({ ...formData, [name]: cleanedValue });
+      const cleaned = value.replace(/\D/g, '').slice(0, 10);
+      setFormData({ ...formData, [name]: cleaned });
     } else {
       setFormData({ ...formData, [name]: value });
     }
@@ -32,38 +28,36 @@ const Signup = () => {
     e.preventDefault();
     setError('');
 
-    // Validation
     if (formData.name.trim().length < 2) {
       setError('Name must be at least 2 characters');
       return;
     }
-
     if (!/^[6-9]\d{9}$/.test(formData.phone)) {
-      setError('Please enter a valid 10-digit phone number');
+      setError('Invalid phone number');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch('/api/auth/signup', {
+      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
       const data = await response.json();
 
-      if (data.success) {
-        setShowOTP(true);
-        alert('OTP sent to your phone!');
-      } else {
+      if (!response.ok) {
         setError(data.message || 'Signup failed');
+        toast.error(data.message || 'Signup failed');
+        return;
       }
+
+      setShowOTP(true);
+      toast.success('OTP sent! Check your phone 📱');
     } catch (err) {
-      console.error('Signup error:', err);
-      setError('Network error. Please try again.');
+      setError('Network error');
+      toast.error('Network error. Try again.');
     } finally {
       setLoading(false);
     }
@@ -71,83 +65,58 @@ const Signup = () => {
 
   const handleVerifyOTP = async (otp) => {
     try {
-      const response = await fetch('/api/auth/verify-signup', {
+      const response = await fetch(`${API_BASE_URL}/auth/verify-signup`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone: formData.phone,
-          otp,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: formData.phone, otp }),
       });
 
       const data = await response.json();
 
-      if (data.success) {
-        // Store token and user data
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        
-        alert('Account created successfully!');
-        navigate('/menu'); // Redirect to menu page
-      } else {
-        alert(data.message || 'Invalid OTP');
+      if (!response.ok) {
+        toast.error(data.message || 'Invalid OTP');
+        return;
       }
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      toast.success('Account created! Welcome! 🎉');
+      navigate('/menu');
     } catch (err) {
-      console.error('OTP verification error:', err);
-      alert('Verification failed. Please try again.');
+      toast.error('Verification failed');
     }
   };
 
   const handleResendOTP = async () => {
     try {
-      const response = await fetch('/api/auth/resend-signup', {
+      const response = await fetch(`${API_BASE_URL}/auth/resend-signup`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: formData.phone }),
       });
 
       const data = await response.json();
 
-      if (data.success) {
-        alert('OTP resent successfully!');
-      } else {
-        alert(data.message || 'Failed to resend OTP');
-      }
+      data.success ? toast.success('OTP resent!') : toast.error(data.message || 'Failed');
     } catch (err) {
-      console.error('Resend OTP error:', err);
-      alert('Failed to resend OTP');
+      toast.error('Failed to resend');
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
-        {/* Logo/Brand */}
         <div className="text-center mb-8">
           <div className="inline-block bg-white p-4 rounded-full shadow-lg mb-4">
-            <svg
-              className="w-12 h-12 text-red-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-              />
+            <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
             </svg>
           </div>
           <h1 className="text-4xl font-bold text-gray-900">Sachin Foods</h1>
           <p className="text-gray-600 mt-2">Create your account to get started</p>
         </div>
 
-        {/* Signup Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Sign Up</h2>
 
@@ -158,59 +127,44 @@ const Signup = () => {
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* Name Input */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Full Name
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
               <div className="relative">
-                <User
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="Enter your full name"
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:border-red-500 focus:outline-none transition-colors"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:border-red-500 focus:outline-none"
                   required
                 />
               </div>
             </div>
 
-            {/* Phone Input */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phone Number
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
               <div className="relative">
-                <Phone
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={20}
-                />
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
                   placeholder="Enter your 10-digit phone number"
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:border-red-500 focus:outline-none transition-colors"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:border-red-500 focus:outline-none"
                   required
                   maxLength="10"
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                We'll send you an OTP to verify your number
-              </p>
+              <p className="text-xs text-gray-500 mt-1">We'll send you an OTP to verify</p>
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading || formData.phone.length !== 10 || !formData.name.trim()}
-              className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
@@ -226,7 +180,6 @@ const Signup = () => {
             </button>
           </form>
 
-          {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-200"></div>
@@ -236,7 +189,6 @@ const Signup = () => {
             </div>
           </div>
 
-          {/* Login Link */}
           <Link
             to="/login"
             className="block w-full text-center py-3 border-2 border-red-600 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition-colors"
@@ -245,13 +197,11 @@ const Signup = () => {
           </Link>
         </div>
 
-        {/* Help Text */}
         <p className="text-center text-sm text-gray-600 mt-6">
           By signing up, you agree to our Terms of Service and Privacy Policy
         </p>
       </div>
 
-      {/* OTP Modal */}
       {showOTP && (
         <OTPVerification
           phone={formData.phone}

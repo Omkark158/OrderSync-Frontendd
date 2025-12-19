@@ -2,7 +2,6 @@
 // 7. Profile.jsx - User Profile Page
 // ============================================
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../hooks/useAuth';
 import { User, Mail, Phone, MapPin, Calendar, Edit2, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Loader from '../../components/common/Loader';
