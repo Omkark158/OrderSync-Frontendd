@@ -11,7 +11,6 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
         secure: false,
-        // REMOVE THE BYPASS - let all /api requests proxy to backend
       },
     },
   },

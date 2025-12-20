@@ -1,5 +1,6 @@
-// src/App.jsx - FINAL: ONLY ONE HIDDEN ADMIN LOGIN URL
+// src/App.jsx - COMPLETE with all routes including InvoiceViewer
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import { OrderProvider } from './context/OrderContext';
 import Layout from './components/common/Layout';
@@ -22,8 +23,9 @@ import NotFound from './pages/user/NotFound';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminOrders from './components/admin/AdminOrders';
-import MenuManager from './components/admin/MenuManager';
+import AdminMenuManager from './components/admin/MenuManager';
 import OrderManager from './components/admin/OrderManager';
+import InvoiceViewer from './components/admin/InvoiceViewer';
 
 // Payment
 import PaymentSuccess from './components/payment/PaymentSuccess';
@@ -33,13 +35,56 @@ function App() {
     <Router>
       <AuthProvider>
         <OrderProvider>
+          {/* Toast Notifications - Global */}
+          <Toaster
+            position="top-center"
+            reverseOrder={false}
+            gutter={8}
+            toastOptions={{
+              duration: 3000,
+              style: {
+                background: '#333',
+                color: '#fff',
+                fontSize: '16px',
+                maxWidth: '500px',
+                padding: '16px',
+                borderRadius: '8px',
+              },
+              success: {
+                duration: 2000,
+                style: {
+                  background: '#10b981',
+                },
+                iconTheme: {
+                  primary: '#fff',
+                  secondary: '#10b981',
+                },
+              },
+              error: {
+                duration: 3000,
+                style: {
+                  background: '#ef4444',
+                },
+                iconTheme: {
+                  primary: '#fff',
+                  secondary: '#ef4444',
+                },
+              },
+              loading: {
+                duration: Infinity,
+                style: {
+                  background: '#3b82f6',
+                },
+              },
+            }}
+          />
+
           <Routes>
             {/* Public User Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
 
-            {/* ONLY ONE ADMIN LOGIN URL - HIDDEN & LOOKS LIKE API */}
-            {/* Change this line in App.jsx */}
+            {/* Hidden Admin Login */}
             <Route path="/admin/secure-access" element={<AdminLogin />} />
 
             {/* User Routes with Layout */}
@@ -51,36 +96,43 @@ function App() {
                   <MenuPage />
                 </PrivateRoute>
               } />
+              
               <Route path="/cart" element={
                 <PrivateRoute>
                   <CartPage />
                 </PrivateRoute>
               } />
+              
               <Route path="/create-order" element={
                 <PrivateRoute>
                   <CreateOrder />
                 </PrivateRoute>
               } />
+              
               <Route path="/orders" element={
                 <PrivateRoute>
                   <OrderHistory />
                 </PrivateRoute>
               } />
+              
               <Route path="/orders/:orderId" element={
                 <PrivateRoute>
                   <OrderManager />
                 </PrivateRoute>
               } />
+              
               <Route path="/profile" element={
                 <PrivateRoute>
                   <Profile />
                 </PrivateRoute>
               } />
+              
               <Route path="/bill/:orderId" element={
                 <PrivateRoute>
                   <Bill />
                 </PrivateRoute>
               } />
+              
               <Route path="/payment-success" element={
                 <PrivateRoute>
                   <PaymentSuccess />
@@ -94,19 +146,29 @@ function App() {
                 <AdminDashboard />
               </AdminRoute>
             } />
+            
             <Route path="/admin/orders" element={
               <AdminRoute>
                 <AdminOrders />
               </AdminRoute>
             } />
+            
             <Route path="/admin/orders/:orderId" element={
               <AdminRoute>
                 <OrderManager />
               </AdminRoute>
             } />
+            
             <Route path="/admin/menu" element={
               <AdminRoute>
-                <MenuManager />
+                <AdminMenuManager />
+              </AdminRoute>
+            } />
+
+            {/* ✅ Invoice Viewer Route */}
+            <Route path="/admin/invoices/:invoiceId" element={
+              <AdminRoute>
+                <InvoiceViewer />
               </AdminRoute>
             } />
 

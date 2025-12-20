@@ -13,7 +13,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       reverseOrder={false}
       gutter={8}
       toastOptions={{
-        duration: 4000,
+        // Default duration - 3 seconds instead of 4
+        duration: 3000,
         style: {
           background: '#333',
           color: '#fff',
@@ -23,16 +24,25 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           borderRadius: '8px',
         },
         success: {
+          duration: 2000, // Success messages disappear faster
           style: {
             background: '#10b981',
           },
           icon: '✅',
         },
         error: {
+          duration: 3000, // Error messages stay a bit longer
           style: {
             background: '#ef4444',
           },
           icon: '❌',
+        },
+        loading: {
+          duration: Infinity, // Loading toasts stay until dismissed
+          style: {
+            background: '#3b82f6',
+          },
+          icon: '⏳',
         },
       }}
     />

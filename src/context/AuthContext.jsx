@@ -1,5 +1,5 @@
 // ============================================
-// 1. AuthContext.jsx - Authentication Context
+// AuthContext.jsx - Fixed with Admin Support
 // ============================================
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -22,23 +22,48 @@ export const AuthProvider = ({ children }) => {
 
   // Load user data from localStorage on mount
   useEffect(() => {
+    console.log('🔄 Loading auth state...');
+    
+    // ✅ Check for admin first, then regular user
+    const adminToken = localStorage.getItem('adminToken');
+    const adminUser = localStorage.getItem('adminUser');
+    
+    if (adminToken && adminUser) {
+      try {
+        const parsedAdmin = JSON.parse(adminUser);
+        console.log('✅ Admin user loaded:', parsedAdmin);
+        setToken(adminToken);
+        setUser(parsedAdmin);
+        setLoading(false);
+        return;
+      } catch (error) {
+        console.error('❌ Error parsing admin data:', error);
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminUser');
+      }
+    }
+    
+    // Check for regular user
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
 
     if (storedToken && storedUser) {
       try {
+        const parsedUser = JSON.parse(storedUser);
+        console.log('✅ Regular user loaded:', parsedUser);
         setToken(storedToken);
-        setUser(JSON.parse(storedUser));
+        setUser(parsedUser);
       } catch (error) {
-        console.error('Error parsing user data:', error);
+        console.error('❌ Error parsing user data:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
     }
+    
     setLoading(false);
   }, []);
 
-  // Login function
+  // Login function (regular users)
   const login = async (phone) => {
     try {
       const response = await fetch('/api/auth/login', {
@@ -169,12 +194,23 @@ export const AuthProvider = ({ children }) => {
 
   // Logout function
   const logout = () => {
+    console.log('🚪 Logging out...');
     setUser(null);
     setToken(null);
+    
+    // Clear all tokens
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    localStorage.removeItem('cart'); // Clear cart on logout
-    navigate('/login');
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    localStorage.removeItem('cart');
+    
+    // Navigate based on current user type
+    if (user?.role === 'admin') {
+      navigate('/admin/secure-access');
+    } else {
+      navigate('/login');
+    }
   };
 
   // Get current user profile
@@ -253,6 +289,18 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     isAdmin,
   };
+
+  // ✅ Show loading screen while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

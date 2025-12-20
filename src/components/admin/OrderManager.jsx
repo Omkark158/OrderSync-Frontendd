@@ -1,15 +1,31 @@
-// OrderManager.jsx
+// OrderManager.jsx - FIXED with toasts and production URLs
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, Printer, Phone, MapPin, Calendar } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import toast from 'react-hot-toast'; // ✅ Import toast
 
 const OrderManager = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
+
+  const isAdmin = user?.role === 'admin';
+
+  // ✅ Helper to get production URL
+  const getProductionUrl = () => {
+    // Use environment variable if available, otherwise use current origin
+    return import.meta.env.VITE_FRONTEND_URL || window.location.origin;
+  };
+
+  useEffect(() => {
+    console.log('👤 Current user:', user);
+    console.log('🔑 Is admin?', isAdmin);
+  }, [user, isAdmin]);
 
   useEffect(() => {
     if (orderId) {
@@ -17,10 +33,14 @@ const OrderManager = () => {
     }
   }, [orderId]);
 
+  const getToken = () => {
+    return localStorage.getItem('adminToken') || localStorage.getItem('token');
+  };
+
   const fetchOrderDetails = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`/api/orders/${orderId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -30,22 +50,29 @@ const OrderManager = () => {
       if (data.success) {
         setOrder(data.data);
       } else {
-        alert('Failed to load order');
+        toast.error(data.message || 'Failed to load order'); // ✅ Toast
       }
     } catch (error) {
       console.error('Error fetching order:', error);
-      alert('Error loading order details');
+      toast.error('Error loading order details'); // ✅ Toast
     } finally {
       setLoading(false);
     }
   };
 
   const updateOrderStatus = async (newStatus) => {
+    if (!isAdmin) {
+      toast.error('Only administrators can update order status'); // ✅ Toast
+      return;
+    }
+
     if (!window.confirm(`Change order status to "${newStatus}"?`)) return;
 
     setUpdating(true);
+    const loadingToast = toast.loading('Updating order status...'); // ✅ Loading toast
+    
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`/api/orders/${orderId}/status`, {
         method: 'PUT',
         headers: {
@@ -56,26 +83,39 @@ const OrderManager = () => {
       });
 
       const data = await response.json();
+      toast.dismiss(loadingToast); // ✅ Dismiss loading
+      
       if (data.success) {
-        alert('Order status updated successfully!');
+        toast.success('Order status updated successfully!'); // ✅ Success toast
         fetchOrderDetails();
       } else {
-        alert(data.message || 'Failed to update status');
+        toast.error(data.message || 'Failed to update status'); // ✅ Error toast
       }
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Error updating order status');
+      toast.dismiss(loadingToast);
+      toast.error('Error updating order status'); // ✅ Error toast
     } finally {
       setUpdating(false);
     }
   };
 
   const generateInvoice = async () => {
+    if (!isAdmin) {
+      toast.error('Only administrators can generate invoices'); // ✅ Toast
+      return;
+    }
+
     if (!window.confirm('Generate invoice for this order?')) return;
 
     setGeneratingInvoice(true);
+    const loadingToast = toast.loading('Generating invoice...'); // ✅ Loading toast
+    
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
+      
+      console.log('🔍 Generating invoice for order:', orderId);
+      
       const response = await fetch(`/api/invoices/generate/${orderId}`, {
         method: 'POST',
         headers: {
@@ -91,24 +131,94 @@ const OrderManager = () => {
       });
 
       const data = await response.json();
+      toast.dismiss(loadingToast); // ✅ Dismiss loading
+      
       if (data.success) {
-        alert('Invoice generated successfully!');
+        console.log('✅ Invoice generated:', data.data);
+        toast.success('Invoice generated successfully!'); // ✅ Success toast
         fetchOrderDetails();
       } else {
-        alert(data.message || 'Failed to generate invoice');
+        console.error('❌ Invoice generation failed:', data.message);
+        toast.error(data.message || 'Failed to generate invoice'); // ✅ Error toast
       }
     } catch (error) {
-      console.error('Error generating invoice:', error);
-      alert('Error generating invoice');
+      console.error('❌ Error generating invoice:', error);
+      toast.dismiss(loadingToast);
+      toast.error('Error generating invoice'); // ✅ Error toast
     } finally {
       setGeneratingInvoice(false);
     }
   };
 
-  const downloadInvoice = () => {
-    if (order.invoice) {
-      window.open(`/api/invoices/${order.invoice}/download`, '_blank');
+  const downloadInvoice = async () => {
+    if (!order.invoice) {
+      toast.error('No invoice available'); // ✅ Toast
+      return;
     }
+
+    const loadingToast = toast.loading('Downloading invoice...'); // ✅ Loading toast
+    
+    try {
+      const token = getToken();
+      const response = await fetch(`/api/invoices/${order.invoice}/download`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.statusText}`);
+      }
+      
+      // Get filename
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = `invoice_${order.orderNumber}.pdf`;
+      
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?(.+)"?/);
+        if (match) filename = match[1];
+      }
+      
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.dismiss(loadingToast);
+      toast.success('Invoice downloaded successfully!'); // ✅ Success toast
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.dismiss(loadingToast);
+      toast.error('Failed to download invoice'); // ✅ Error toast
+    }
+  };
+
+  // ✅ FIXED: Share invoice via WhatsApp with production URL
+  const shareInvoiceWhatsApp = () => {
+    if (!order.invoice) {
+      toast.error('No invoice available to share'); // ✅ Toast
+      return;
+    }
+    
+    const phone = order.customerPhone.replace(/^\+91/, '').replace(/\s/g, '');
+    
+    // ✅ Use production URL, not localhost
+    const productionUrl = getProductionUrl();
+    const invoiceUrl = `${productionUrl}/api/invoices/${order.invoice}/download`;
+    
+    const message = encodeURIComponent(
+      `Hi ${order.customerName}!\n\nYour invoice for Order ${order.orderNumber} is ready.\n\nTotal Amount: ₹${order.totalAmount}\nDownload Invoice: ${invoiceUrl}\n\nThank you for choosing Sachin Foods!\nContact: 9539387240, 9388808825`
+    );
+    
+    const whatsappUrl = `https://wa.me/91${phone}?text=${message}`;
+    window.open(whatsappUrl, '_blank');
+    toast.success('Opening WhatsApp...'); // ✅ Toast
   };
 
   const formatDate = (date) => {
@@ -149,7 +259,7 @@ const OrderManager = () => {
       <div className="p-6">
         <p className="text-red-600">Order not found</p>
         <button
-          onClick={() => navigate('/admin/orders')}
+          onClick={() => navigate(isAdmin ? '/admin/orders' : '/orders')}
           className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg"
         >
           Back to Orders
@@ -164,7 +274,7 @@ const OrderManager = () => {
     <div className="p-6 max-w-5xl mx-auto">
       {/* Back Button */}
       <button
-        onClick={() => navigate('/admin/orders')}
+        onClick={() => navigate(isAdmin ? '/admin/orders' : '/orders')}
         className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
       >
         <ArrowLeft size={20} />
@@ -339,36 +449,31 @@ const OrderManager = () => {
         </div>
       </div>
 
-      {/* Status Update Card */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Update Order Status</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Change the order status to track progress
-        </p>
-        <div className="flex gap-2 flex-wrap">
-          {statusOptions.map((status) => (
-            <button
-              key={status}
-              onClick={() => updateOrderStatus(status)}
-              disabled={updating || order.orderStatus === status}
-              className={`px-5 py-2.5 rounded-lg capitalize font-medium transition-all ${
-                order.orderStatus === status
-                  ? 'bg-red-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {updating && order.orderStatus !== status ? (
-                <span className="flex items-center gap-2">
-                  <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
-                  Updating...
-                </span>
-              ) : (
-                status
-              )}
-            </button>
-          ))}
+      {/* Status Update Card - ADMIN ONLY */}
+      {isAdmin && (
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Update Order Status</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Change the order status to track progress
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            {statusOptions.map((status) => (
+              <button
+                key={status}
+                onClick={() => updateOrderStatus(status)}
+                disabled={updating || order.orderStatus === status}
+                className={`px-5 py-2.5 rounded-lg capitalize font-medium transition-all ${
+                  order.orderStatus === status
+                    ? 'bg-red-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Invoice Management Card */}
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -384,20 +489,31 @@ const OrderManager = () => {
                 Invoice has been created for this order
               </p>
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => navigate(`/admin/invoices/${order.invoice}`)}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <FileText size={20} />
-                View Invoice
-              </button>
+            <div className="flex gap-3 flex-wrap">
+              {isAdmin && (
+                <button
+                  onClick={() => navigate(`/admin/invoices/${order.invoice}`)}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <FileText size={20} />
+                  View Invoice
+                </button>
+              )}
               <button
                 onClick={downloadInvoice}
-                className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 <Printer size={20} />
                 Download PDF
+              </button>
+              <button
+                onClick={shareInvoiceWhatsApp}
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                Share via WhatsApp
               </button>
             </div>
           </div>
@@ -408,28 +524,32 @@ const OrderManager = () => {
                 Invoice Not Generated
               </p>
               <p className="text-sm text-yellow-700">
-                {order.orderStatus !== 'confirmed'
-                  ? 'Please confirm the order first before generating invoice'
-                  : 'Click the button below to generate invoice'}
+                {isAdmin
+                  ? order.orderStatus !== 'confirmed'
+                    ? 'Please confirm the order first before generating invoice'
+                    : 'Click the button below to generate invoice'
+                  : 'Invoice will be generated by admin once order is confirmed'}
               </p>
             </div>
-            <button
-              onClick={generateInvoice}
-              disabled={order.orderStatus !== 'confirmed' || generatingInvoice}
-              className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {generatingInvoice ? (
-                <>
-                  <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <FileText size={20} />
-                  Generate Invoice
-                </>
-              )}
-            </button>
+            {isAdmin && (
+              <button
+                onClick={generateInvoice}
+                disabled={order.orderStatus !== 'confirmed' || generatingInvoice}
+                className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {generatingInvoice ? (
+                  <>
+                    <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <FileText size={20} />
+                    Generate Invoice
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
       </div>

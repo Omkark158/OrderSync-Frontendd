@@ -1,5 +1,5 @@
 // ============================================
-// 2. AdminDashboard.jsx - Main Admin Dashboard
+// AdminDashboard.jsx - Fixed with Auth Check
 // ============================================
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +14,8 @@ import {
   DollarSign,
   Package,
   CheckCircle,
-  XCircle
+  XCircle,
+  AlertTriangle
 } from 'lucide-react';
 import AdminSidebar from '../../components/admin/AdminSidebar';
 
@@ -30,65 +31,141 @@ const AdminDashboard = () => {
   });
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    const token = localStorage.getItem('adminToken');
+    
+    if (!token) {
+      console.log('No token found, redirecting to login');
+      navigate('/admin/secure-access');
+      return;
+    }
+
+    console.log('Token exists, fetching dashboard data');
     fetchDashboardData();
   }, []);
 
   const fetchDashboardData = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
       const token = localStorage.getItem('adminToken');
+      
+      if (!token) {
+        navigate('/admin/secure-access');
+        return;
+      }
 
+      console.log('Fetching dashboard data with token:', token.substring(0, 20) + '...');
+
+      // Backend URL - change this to match your backend
+      const API_URL = 'http://localhost:5000/api';
+      
       // Fetch orders
-      const ordersResponse = await fetch('/api/orders', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const ordersData = await ordersResponse.json();
+      let ordersData = { success: false, data: [] };
+      try {
+        console.log('Fetching orders from', `${API_URL}/orders`);
+        const ordersResponse = await fetch(`${API_URL}/orders`, {
+          method: 'GET',
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        });
+        
+        console.log('Orders response status:', ordersResponse.status);
+        
+        if (ordersResponse.ok) {
+          ordersData = await ordersResponse.json();
+          console.log('Orders data received:', ordersData);
+        } else if (ordersResponse.status === 401) {
+          console.error('Orders fetch: Unauthorized (401)');
+          localStorage.removeItem('adminToken');
+          localStorage.removeItem('adminUser');
+          navigate('/admin/secure-access');
+          return;
+        } else {
+          const errorText = await ordersResponse.text();
+          console.error('Orders fetch error:', ordersResponse.status, errorText);
+        }
+      } catch (err) {
+        console.error('Error fetching orders:', err);
+      }
 
-      if (ordersData.success) {
+      // Calculate order stats
+      if (ordersData.success && ordersData.data) {
         const orders = ordersData.data;
         
-        // Calculate stats
         const pending = orders.filter(o => o.orderStatus === 'pending').length;
         const completed = orders.filter(o => o.orderStatus === 'delivered').length;
         const revenue = orders
           .filter(o => o.orderStatus !== 'cancelled')
-          .reduce((sum, o) => sum + o.totalAmount, 0);
+          .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
         
         const today = new Date().toDateString();
         const todayCount = orders.filter(o => 
           new Date(o.createdAt).toDateString() === today
         ).length;
 
-        setStats({
+        setStats(prev => ({
+          ...prev,
           totalOrders: orders.length,
           pendingOrders: pending,
           completedOrders: completed,
           totalRevenue: revenue,
           todayOrders: todayCount,
-          activeMenuItems: 0, // You can fetch this separately
-        });
+        }));
 
-        // Get recent 5 orders
         setRecentOrders(orders.slice(0, 5));
       }
 
-      // Fetch menu items count
-      const menuResponse = await fetch('/api/menu', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const menuData = await menuResponse.json();
-      
-      if (menuData.success) {
-        setStats(prev => ({
-          ...prev,
-          activeMenuItems: menuData.data.filter(item => item.isAvailable).length,
-        }));
+      // Fetch menu items
+      try {
+        console.log('Fetching menu from', `${API_URL}/menu`);
+        const menuResponse = await fetch(`${API_URL}/menu`, {
+          method: 'GET',
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        });
+        
+        console.log('Menu response status:', menuResponse.status);
+        
+        if (menuResponse.ok) {
+          const menuData = await menuResponse.json();
+          console.log('Menu data received:', menuData);
+          
+          if (menuData.success) {
+            const menuItems = menuData.data || [];
+            const activeCount = Array.isArray(menuItems) 
+              ? menuItems.filter(item => item.isAvailable && !item.isDeleted).length 
+              : 0;
+            
+            setStats(prev => ({
+              ...prev,
+              activeMenuItems: activeCount,
+            }));
+          }
+        } else if (menuResponse.status === 401) {
+          console.error('Menu fetch: Unauthorized (401)');
+          localStorage.removeItem('adminToken');
+          localStorage.removeItem('adminUser');
+          navigate('/admin/secure-access');
+          return;
+        } else {
+          const errorText = await menuResponse.text();
+          console.error('Menu fetch error:', menuResponse.status, errorText);
+        }
+      } catch (err) {
+        console.error('Error fetching menu items:', err);
       }
 
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('Error in fetchDashboardData:', error);
+      setError('Failed to load dashboard data. Please try refreshing the page.');
     } finally {
       setLoading(false);
     }
@@ -97,7 +174,7 @@ const AdminDashboard = () => {
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminUser');
-    navigate('/admin/login');
+    navigate('/admin/secure-access');
   };
 
   const formatCurrency = (amount) => {
@@ -105,7 +182,7 @@ const AdminDashboard = () => {
       style: 'currency',
       currency: 'INR',
       maximumFractionDigits: 0,
-    }).format(amount);
+    }).format(amount || 0);
   };
 
   const getStatusColor = (status) => {
@@ -157,6 +234,24 @@ const AdminDashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mx-8 mt-8 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <AlertTriangle className="text-red-600 mt-0.5 mr-3 flex-shrink-0" size={20} />
+              <div className="flex-1">
+                <p className="text-red-700 font-medium">{error}</p>
+                <button 
+                  onClick={fetchDashboardData}
+                  className="mt-2 text-sm text-red-600 underline hover:no-underline"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="p-8">
@@ -276,13 +371,13 @@ const AdminDashboard = () => {
                     {recentOrders.map((order) => (
                       <tr key={order._id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
-                          {order.orderNumber}
+                          {order.orderNumber || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-gray-700">
-                          {order.customerName}
+                          {order.customerName || 'Unknown'}
                         </td>
                         <td className="px-6 py-4 text-gray-700">
-                          {order.orderItems.length} items
+                          {order.orderItems?.length || 0} items
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap font-semibold text-gray-900">
                           {formatCurrency(order.totalAmount)}
