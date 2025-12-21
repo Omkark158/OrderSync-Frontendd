@@ -1,5 +1,6 @@
+// pages/Home.jsx - Updated for catering business
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react'; 
 import { ArrowRight, Phone, Mail, MapPin } from 'lucide-react';
 
 import HeroSection from '../../components/home/HeroSection';
@@ -34,20 +35,20 @@ const Home = () => {
     <div className="min-h-screen bg-gray-50">
       <HeroSection />
 
-      {/* Order Now CTA */}
+      {/* Order Now CTA - Updated for Catering Business */}
       <section className="bg-gradient-to-r from-red-600 to-orange-600 py-16">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <h2 className="text-4xl font-bold text-white mb-4">
-            Ready to Order Fresh Food?
+            Authentic Kerala Cuisine for Your Events
           </h2>
           <p className="text-xl text-white mb-8 opacity-90">
-            Experience the authentic taste of traditional Kerala cuisine
+            Traditional recipes crafted with love • Perfect for parties, functions & gatherings
           </p>
           <button
             onClick={handleBrowseMenu}
             className="bg-white text-red-600 px-8 py-4 rounded-lg font-bold text-lg hover:bg-gray-100 transition-colors inline-flex items-center gap-2"
           >
-            Browse Menu
+            Explore Our Menu
             <ArrowRight size={24} />
           </button>
         </div>

@@ -1,15 +1,15 @@
-// pages/user/CreateOrder.jsx - FINAL FIXED VERSION
+// pages/user/CreateOrder.jsx - PICKUP ONLY (No Delivery)
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrder } from '../../context/OrderContext';
 import { useAuth } from '../../context/AuthContext';
 import OrderSummary from '../../components/order/OrderSummary';
-import { Calendar, MapPin, CreditCard } from 'lucide-react';
+import { Calendar, MapPin, CreditCard, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const CreateOrder = () => {
   const navigate = useNavigate();
-  const { cart, getCartTotal, createOrder, fetchOrders } = useOrder(); // ← Added fetchOrders
+  const { cart, getCartTotal, createOrder, fetchOrders } = useOrder();
   const { user } = useAuth();
 
   const [orderPlaced, setOrderPlaced] = useState(false);
@@ -18,10 +18,10 @@ const CreateOrder = () => {
 
   const [formData, setFormData] = useState({
     deliveryAddress: {
-      street: '',
-      city: '',
+      street: 'Pickup from Store',
+      city: 'Kundara',
       state: 'Kerala',
-      pincode: '',
+      pincode: '691501',
     },
     orderDate: '',
     orderTime: '',
@@ -46,41 +46,24 @@ const CreateOrder = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.');
-      setFormData(prev => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent],
-          [child]: value,
-        },
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-      }));
-    }
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.deliveryAddress.street || !formData.deliveryAddress.city || !formData.deliveryAddress.pincode) {
-      toast.error('Please fill in all address fields');
-      return;
-    }
-
     if (!formData.orderDate || !formData.orderTime) {
-      toast.error('Please select delivery date and time');
+      toast.error('Please select pickup date and time');
       return;
     }
 
     const orderDateTime = new Date(`${formData.orderDate}T${formData.orderTime}`);
 
     if (orderDateTime < new Date()) {
-      toast.error('Delivery time must be in the future');
+      toast.error('Pickup time must be in the future');
       return;
     }
 
@@ -100,12 +83,7 @@ const CreateOrder = () => {
         setOrderPlaced(true);
         setPlacedOrder(result.order);
 
-        // Success toast with unique ID (prevents duplicates in dev)
-        toast.success('🎉 Order placed successfully!', {
-          id: 'order-placed-success',
-        });
-
-        // CRITICAL: Refresh orders list so new order appears immediately
+        // Refresh orders list
         await fetchOrders();
       } else {
         toast.error(result.message || 'Failed to create order');
@@ -155,24 +133,25 @@ const CreateOrder = () => {
           {/* Form */}
           <div className="lg:col-span-2">
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Address */}
-              <div className="bg-white rounded-lg shadow-md p-6">
+              {/* Pickup Location Info */}
+              <div className="bg-white rounded-lg shadow-md p-6 border-2 border-red-200">
                 <div className="flex items-center gap-2 mb-4">
                   <MapPin className="text-red-600" size={24} />
-                  <h2 className="text-xl font-semibold">Delivery Address</h2>
+                  <h2 className="text-xl font-semibold">Pickup Location</h2>
                 </div>
-                <div className="space-y-4">
-                  <input type="text" name="deliveryAddress.street" value={formData.deliveryAddress.street} onChange={handleInputChange} required placeholder="Street Address *" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500" />
-                  <div className="grid grid-cols-2 gap-4">
-                    <input type="text" name="deliveryAddress.city" value={formData.deliveryAddress.city} onChange={handleInputChange} required placeholder="City *" className="px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500" />
-                    <select name="deliveryAddress.state" value={formData.deliveryAddress.state} onChange={handleInputChange} required className="px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500">
-                      <option value="Kerala">Kerala</option>
-                      <option value="Tamil Nadu">Tamil Nadu</option>
-                      <option value="Karnataka">Karnataka</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  <input type="text" name="deliveryAddress.pincode" value={formData.deliveryAddress.pincode} onChange={handleInputChange} required pattern="[0-9]{6}" maxLength="6" placeholder="Pincode *" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500" />
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <p className="font-semibold text-gray-900 mb-2">Sachin Foods</p>
+                  <p className="text-gray-700">Kundara, Kollam</p>
+                  <p className="text-gray-700">Kerala - 691501</p>
+                  <p className="text-sm text-gray-600 mt-3 flex items-center gap-2">
+                    <Clock size={16} />
+                    Operating Hours: 8:00 AM - 8:00 PM
+                  </p>
+                </div>
+                <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <p className="text-sm text-yellow-800">
+                    📍 <strong>Self Pickup Only:</strong> Please collect your order from our store at the scheduled time.
+                  </p>
                 </div>
               </div>
 
@@ -180,18 +159,45 @@ const CreateOrder = () => {
               <div className="bg-white rounded-lg shadow-md p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Calendar className="text-red-600" size={24} />
-                  <h2 className="text-xl font-semibold">Delivery Details</h2>
+                  <h2 className="text-xl font-semibold">Pickup Details</h2>
                 </div>
                 <div className="grid grid-cols-2 gap-4 mb-4">
-                  <input type="date" name="orderDate" value={formData.orderDate} onChange={handleInputChange} required min={new Date().toISOString().split('T')[0]} className="px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500" />
-                  <select name="orderTime" value={formData.orderTime} onChange={handleInputChange} required className="px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500">
-                    <option value="">Select time</option>
-                    {['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'].map(t => (
-                      <option key={t} value={t}>{t.replace(':00', '')} {parseInt(t) < 12 ? 'AM' : 'PM'}</option>
-                    ))}
-                  </select>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Pickup Date *</label>
+                    <input
+                      type="date"
+                      name="orderDate"
+                      value={formData.orderDate}
+                      onChange={handleInputChange}
+                      required
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Pickup Time *</label>
+                    <select
+                      name="orderTime"
+                      value={formData.orderTime}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
+                    >
+                      <option value="">Select time</option>
+                      {['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00'].map(t => (
+                        <option key={t} value={t}>{t.replace(':00', ':00')} {parseInt(t) < 12 ? 'AM' : 'PM'}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <textarea name="specialInstructions" value={formData.specialInstructions} onChange={handleInputChange} rows="3" placeholder="Special Instructions (Optional)" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500" />
+                <textarea
+                  name="specialInstructions"
+                  value={formData.specialInstructions}
+                  onChange={handleInputChange}
+                  rows="3"
+                  placeholder="Special Instructions (Optional)"
+                  className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
+                />
               </div>
 
               {/* Payment */}
@@ -200,13 +206,39 @@ const CreateOrder = () => {
                   <CreditCard className="text-red-600" size={24} />
                   <h2 className="text-xl font-semibold">Payment Details</h2>
                 </div>
-                <input type="number" name="advancePayment" value={formData.advancePayment} onChange={handleInputChange} min="0" max={getCartTotal()} placeholder="Advance Payment (₹)" className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-2" />
-                <p className="text-sm text-gray-500 mb-4">Balance: ₹{getCartTotal() - formData.advancePayment}</p>
-                <select name="paymentMethod" value={formData.paymentMethod} onChange={handleInputChange} className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500">
-                  <option value="cash">Cash on Delivery</option>
-                  <option value="online">Online Payment</option>
-                  <option value="upi">UPI</option>
-                </select>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Advance Payment (Optional)
+                  </label>
+                  <input
+                    type="number"
+                    name="advancePayment"
+                    value={formData.advancePayment}
+                    onChange={handleInputChange}
+                    min="0"
+                    max={getCartTotal()}
+                    placeholder="Enter amount"
+                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-2"
+                  />
+                  <p className="text-sm text-gray-500">
+                    Total: ₹{getCartTotal()} | Balance: ₹{getCartTotal() - formData.advancePayment}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Payment Method
+                  </label>
+                  <select
+                    name="paymentMethod"
+                    value={formData.paymentMethod}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
+                  >
+                    <option value="cash">Pay at Pickup (Cash)</option>
+                    <option value="online">Online Payment</option>
+                    <option value="upi">UPI</option>
+                  </select>
+                </div>
               </div>
 
               <button

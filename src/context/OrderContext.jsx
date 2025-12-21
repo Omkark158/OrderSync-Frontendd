@@ -1,4 +1,4 @@
-// context/OrderContext.jsx - FIXED: No more infinite loop
+// context/OrderContext.jsx - COMPLETE with all functions
 import { createContext, useContext, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
@@ -19,9 +19,7 @@ export const OrderProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [cartLoading, setCartLoading] = useState(true);
 
-  // ============================================
-  // 1. Load cart from localStorage on mount
-  // ============================================
+  // Load cart from localStorage on mount
   useEffect(() => {
     console.log('🔄 Loading cart from localStorage...');
     const storedCart = localStorage.getItem('cart');
@@ -35,70 +33,38 @@ export const OrderProvider = ({ children }) => {
         console.error('❌ Error loading cart:', error);
         localStorage.removeItem('cart');
       }
-    } else {
-      console.log('ℹ️ No cart in localStorage');
     }
     
     setCartLoading(false);
   }, []);
 
-  // ============================================
-  // 2. Save cart to localStorage whenever it changes
-  // ============================================
+  // Save cart to localStorage whenever it changes
   useEffect(() => {
     if (!cartLoading) {
       console.log('💾 Saving cart to localStorage:', cart);
       localStorage.setItem('cart', JSON.stringify(cart));
-      // REMOVED: dispatchEvent — no longer needed (was causing infinite loop)
     }
   }, [cart, cartLoading]);
 
-  // ============================================
-  // 3. Listen for storage changes (cross-tab sync) — KEEP THIS
-  // ============================================
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'cart') {
-        console.log('📦 Cart updated in another tab');
-        const updatedCart = e.newValue ? JSON.parse(e.newValue) : [];
-        setCart(updatedCart);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // ============================================
-  // 4. REMOVED: Custom event listener (was causing infinite loop)
-  // ============================================
-  // Deleted entirely — React Context already handles same-tab updates instantly
-
-  // ============================================
   // Cart Helper Functions
-  // ============================================
-
   const getCartCount = () => {
     return cart.reduce((count, item) => count + item.quantity, 0);
   };
 
   const getCartTotal = () => {
-    const total = cart.reduce((total, item) => total + item.price * item.quantity, 0);
-    return total;
+    return cart.reduce((total, item) => total + item.price * item.quantity, 0);
   };
 
   const calculateGST = () => {
     const subtotal = getCartTotal();
-    return (subtotal * 5) / 100; // 5% GST
+    return (subtotal * 5) / 100;
   };
 
   const getFinalTotal = () => {
     return getCartTotal() + calculateGST();
   };
 
-  // ============================================
   // Add item to cart
-  // ============================================
   const addToCart = (item) => {
     console.log('➕ Adding to cart:', item);
     
@@ -108,22 +74,17 @@ export const OrderProvider = ({ children }) => {
       if (existingItemIndex > -1) {
         const updatedCart = [...prevCart];
         updatedCart[existingItemIndex].quantity += 1;
-        console.log('✅ Updated quantity for existing item');
         toast.success(`${item.name} quantity updated!`);
         return updatedCart;
       } else {
-        console.log('✅ Added new item to cart');
         toast.success(`${item.name} added to cart!`);
         return [...prevCart, { ...item, quantity: 1 }];
       }
     });
   };
 
-  // ============================================
   // Remove item from cart
-  // ============================================
   const removeFromCart = (itemId) => {
-    console.log('🗑️ Removing from cart:', itemId);
     setCart(prevCart => {
       const item = prevCart.find(i => i._id === itemId);
       if (item) {
@@ -133,12 +94,8 @@ export const OrderProvider = ({ children }) => {
     });
   };
 
-  // ============================================
   // Update item quantity
-  // ============================================
   const updateQuantity = (itemId, quantity) => {
-    console.log('🔄 Updating quantity:', itemId, quantity);
-    
     if (quantity < 1) {
       removeFromCart(itemId);
       return;
@@ -151,21 +108,14 @@ export const OrderProvider = ({ children }) => {
     });
   };
 
-  // ============================================
   // Clear entire cart
-  // ============================================
   const clearCart = () => {
-    console.log('🧹 Clearing cart');
     setCart([]);
-    // localStorage.removeItem('cart'); → already handled by the save effect
     toast.success('Cart cleared');
   };
 
-  // ============================================
-  // Create order (unchanged)
-  // ============================================
+  // Create order
   const createOrder = async (orderData) => {
-    // ... (same as before)
     setLoading(true);
     const loadingToast = toast.loading('Creating your order...');
     
@@ -192,6 +142,8 @@ export const OrderProvider = ({ children }) => {
         subtotal: item.price * item.quantity,
       }));
 
+      console.log('📝 Creating order:', orderData);
+
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: {
@@ -210,26 +162,6 @@ export const OrderProvider = ({ children }) => {
       if (data.success) {
         setCurrentOrder(data.data);
         clearCart();
-        
-        // Admin SMS notification
-        try {
-          await fetch('/api/sms/admin-notification', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              orderNumber: data.data.orderNumber,
-              customerName: data.data.customerName,
-              totalAmount: data.data.totalAmount,
-              orderDateTime: data.data.orderDateTime,
-            }),
-          });
-        } catch (error) {
-          console.error('❌ Admin notification failed:', error);
-        }
-        
         toast.success('🎉 Order placed successfully!');
         return { success: true, order: data.data };
       } else {
@@ -246,13 +178,141 @@ export const OrderProvider = ({ children }) => {
     }
   };
 
-  // fetchOrders, fetchOrderById, cancelOrder, downloadInvoice remain exactly the same
-  // (copy-paste them from your original file — no changes needed)
+  // ✅ Fetch user orders
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        toast.error('Please login to view orders');
+        return { success: false, message: 'Authentication required' };
+      }
 
-  const fetchOrders = async () => { /* ... same as before */ };
-  const fetchOrderById = async (orderId) => { /* ... same as before */ };
-  const cancelOrder = async (orderId, reason) => { /* ... same as before */ };
-  const downloadInvoice = async (orderId) => { /* ... same as before */ };
+      console.log('📡 Fetching orders...');
+      const response = await fetch('/api/orders', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      console.log('📦 Orders fetched:', data);
+
+      if (data.success) {
+        setOrders(data.data || []);
+        return { success: true, orders: data.data };
+      } else {
+        toast.error(data.message || 'Failed to fetch orders');
+        return { success: false, message: data.message };
+      }
+    } catch (error) {
+      console.error('Fetch orders error:', error);
+      toast.error('Failed to fetch orders');
+      return { success: false, message: 'Failed to fetch orders' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch single order
+  const fetchOrderById = async (orderId) => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/orders/${orderId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setCurrentOrder(data.data);
+        return { success: true, order: data.data };
+      } else {
+        toast.error(data.message || 'Failed to fetch order');
+        return { success: false, message: data.message };
+      }
+    } catch (error) {
+      console.error('Fetch order error:', error);
+      toast.error('Failed to fetch order');
+      return { success: false, message: 'Failed to fetch order' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cancel order
+  const cancelOrder = async (orderId, reason) => {
+    setLoading(true);
+    const loadingToast = toast.loading('Cancelling order...');
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/orders/${orderId}/cancel`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason }),
+      });
+
+      const data = await response.json();
+      toast.dismiss(loadingToast);
+
+      if (data.success) {
+        setOrders(orders.map((order) =>
+          order._id === orderId ? data.data : order
+        ));
+        toast.success('Order cancelled successfully');
+        return { success: true, order: data.data };
+      } else {
+        toast.error(data.message || 'Failed to cancel order');
+        return { success: false, message: data.message };
+      }
+    } catch (error) {
+      console.error('Cancel order error:', error);
+      toast.dismiss(loadingToast);
+      toast.error('Failed to cancel order');
+      return { success: false, message: 'Failed to cancel order' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Download invoice
+  const downloadInvoice = async (orderId) => {
+    const loadingToast = toast.loading('Preparing invoice...');
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/invoices/order/${orderId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      toast.dismiss(loadingToast);
+
+      if (data.success && data.data) {
+        window.open(`/api/invoices/${data.data._id}/download`, '_blank');
+        toast.success('Invoice opened in new tab');
+        return { success: true };
+      } else {
+        toast.error('Invoice not available yet');
+        return { success: false, message: 'Invoice not available yet' };
+      }
+    } catch (error) {
+      console.error('Download invoice error:', error);
+      toast.dismiss(loadingToast);
+      toast.error('Failed to download invoice');
+      return { success: false, message: 'Failed to download invoice' };
+    }
+  };
 
   const value = {
     cart,
