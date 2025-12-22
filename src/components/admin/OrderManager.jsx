@@ -1,5 +1,4 @@
-// src/components/admin/OrderManager.jsx - FULLY FIXED VERSION
-
+// src/components/admin/OrderManager.jsx
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -15,7 +14,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
-import { invoiceService } from '../../services/invoiceService'; // ← NEW IMPORT
 
 const OrderManager = () => {
   const { orderId } = useParams();
@@ -80,6 +78,7 @@ const OrderManager = () => {
           if (data.success) {
             toast.success('Order confirmed successfully!');
             
+            // Send SMS separately
             const smsToast = toast.loading('Sending confirmation SMS...');
             try {
               await fetch('/api/sms/order-status', {
@@ -140,6 +139,7 @@ const OrderManager = () => {
           if (data.success) {
             toast.success('Order denied successfully');
             
+            // Send SMS separately
             const smsToast = toast.loading('Sending cancellation SMS...');
             try {
               await fetch('/api/sms/order-status', {
@@ -193,6 +193,7 @@ const OrderManager = () => {
           if (data.success) {
             toast.success(`Status updated to ${newStatus}!`);
             
+            // Send SMS separately
             const smsToast = toast.loading('Sending status update SMS...');
             try {
               await fetch('/api/sms/order-status', {
@@ -225,7 +226,38 @@ const OrderManager = () => {
     });
   };
 
-  // Delete Order
+  // Update Payment Status
+  const updatePaymentStatus = async (newStatus) => {
+    setShowConfirmModal({
+      title: 'Update Payment Status',
+      message: `Mark payment as "${newStatus}"?`,
+      onConfirm: async () => {
+        const loadingToast = toast.loading('Updating payment status...');
+        try {
+          const token = getToken();
+          const res = await fetch(`/api/orders/${orderId}/payment-status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ paymentStatus: newStatus }),
+          });
+          const data = await res.json();
+          toast.dismiss(loadingToast);
+          
+          if (data.success) {
+            toast.success(`Payment marked as ${newStatus}!`);
+            fetchOrderDetails();
+          } else {
+            toast.error(data.message || 'Failed to update payment status');
+          }
+        } catch (err) {
+          toast.dismiss(loadingToast);
+          toast.error('Error updating payment status');
+        }
+      },
+    });
+  };
+
+  // Delete Order (only delivered or cancelled)
   const deleteOrder = async () => {
     setShowConfirmModal({
       title: 'Delete Order',
@@ -287,31 +319,15 @@ const OrderManager = () => {
     }
   };
 
-  // ✅ FIXED: View Invoice - Now sends token and opens PDF properly
-  const viewInvoice = async () => {
-    try {
-      await invoiceService.viewInvoice(order.invoice);
-    } catch (error) {
-      toast.error('Failed to open invoice. Please try again.');
-      console.error('View invoice error:', error);
-    }
+  // Invoice Actions
+  const viewInvoice = () => {
+    window.open(`/api/invoices/${order.invoice}/view`, '_blank');
   };
 
-  // ✅ FIXED: Download Invoice - Now sends token and downloads correctly
-  const downloadInvoice = async () => {
-    const loadingToast = toast.loading('Downloading invoice...');
-    try {
-      await invoiceService.downloadInvoice(order.invoice);
-      toast.dismiss(loadingToast);
-      toast.success('Invoice downloaded successfully!');
-    } catch (error) {
-      toast.dismiss(loadingToast);
-      toast.error('Failed to download invoice');
-      console.error('Download invoice error:', error);
-    }
+  const downloadInvoice = () => {
+    window.open(`/api/invoices/${order.invoice}/download`, '_blank');
   };
 
-  // Share via WhatsApp (public link - no auth needed)
   const shareInvoiceWhatsApp = () => {
     const phone = order.customerPhone.replace(/^\+91/, '').replace(/\s/g, '');
     const invoiceUrl = `${window.location.origin}/api/invoices/${order.invoice}/download`;
@@ -321,7 +337,6 @@ const OrderManager = () => {
     window.open(`https://wa.me/91${phone}?text=${message}`, '_blank');
   };
 
-  // Send Invoice via SMS
   const sendInvoiceSMS = async () => {
     setShowConfirmModal({
       title: 'Send Invoice via SMS',
@@ -409,6 +424,7 @@ const OrderManager = () => {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
+      {/* Confirmation Modal */}
       {showConfirmModal && (
         <ConfirmModal
           {...showConfirmModal}
@@ -416,6 +432,7 @@ const OrderManager = () => {
         />
       )}
 
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <button
           onClick={() => navigate('/admin/orders')}
@@ -504,6 +521,17 @@ const OrderManager = () => {
             <span>Balance Due</span>
             <span className="text-orange-600">₹{order.remainingAmount || 0}</span>
           </div>
+          <div className="flex justify-between items-center pt-4 border-t">
+            <span className="text-sm font-medium">Payment Status</span>
+            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+              order.paymentStatus === 'completed' ? 'bg-green-100 text-green-700' :
+              order.paymentStatus === 'partial' ? 'bg-orange-100 text-orange-700' :
+              order.paymentStatus === 'pending' ? 'bg-red-100 text-red-700' :
+              'bg-gray-100 text-gray-700'
+            }`}>
+              {order.paymentStatus}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -551,6 +579,34 @@ const OrderManager = () => {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Payment Status Management */}
+          {!['cancelled', 'denied'].includes(order.orderStatus) && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-xl font-bold mb-4">Payment Management</h2>
+              <div className="flex flex-wrap gap-3">
+                {['pending', 'partial', 'completed'].map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => updatePaymentStatus(status)}
+                    disabled={order.paymentStatus === status}
+                    className={`px-5 py-2.5 rounded-lg capitalize font-medium ${
+                      order.paymentStatus === status 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-gray-100 hover:bg-gray-200'
+                    } disabled:opacity-50`}
+                  >
+                    {status === 'completed' ? 'Paid' : status}
+                  </button>
+                ))}
+              </div>
+              <p className="text-sm text-gray-600 mt-3">
+                Current: <span className="font-semibold">{order.paymentStatus}</span> | 
+                Advance: ₹{order.advancePayment || 0} | 
+                Balance: ₹{order.remainingAmount || 0}
+              </p>
             </div>
           )}
         </>

@@ -1,4 +1,4 @@
-// AdminLogin.jsx - Fixed with redirect and toast duration
+// AdminLogin.jsx - UPDATED & BULLETPROOF VERSION
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, Key, Eye, EyeOff, Shield, Loader2 } from 'lucide-react';
@@ -33,46 +33,58 @@ const AdminLogin = () => {
         body: JSON.stringify(formData),
       });
 
+      // Log response status for debugging
+      console.log('Login response status:', response.status);
+
       if (!response.ok) {
         let errorMsg = 'Server error';
         try {
           const errorData = await response.json();
           errorMsg = errorData.message || errorMsg;
+          console.log('Error response:', errorData);
         } catch {
           errorMsg = `HTTP ${response.status}: ${response.statusText}`;
         }
-        toast.error(errorMsg, { duration: 3000 });
+        toast.error(errorMsg, { duration: 4000 });
         setLoading(false);
         return;
       }
 
       const data = await response.json();
+      console.log('Login response data:', data); // ← CRITICAL DEBUG LOG
 
       if (data.success) {
-        // Store admin session
+        // === MAKE SURE TOKEN EXISTS ===
+        if (!data.token) {
+          console.error('Backend returned success but NO TOKEN!');
+          toast.error('Login succeeded but no token received. Contact developer.', { duration: 5000 });
+          setLoading(false);
+          return;
+        }
+
+        // Save token and user
         localStorage.setItem('adminToken', data.token);
-        localStorage.setItem('adminUser', JSON.stringify(data.admin || data.user));
+        localStorage.setItem('adminUser', JSON.stringify(data.admin || data.user || {}));
 
-        console.log('✅ Admin login successful');
-        console.log('Token saved:', data.token ? 'Yes' : 'No');
+        console.log('✅ adminToken saved to localStorage');
+        console.log('Token preview:', data.token.substring(0, 30) + '...');
 
-        // Show success toast - Don't set loading to false yet!
         toast.success('Welcome back, Admin! 🎉', {
           duration: 2000,
           icon: '👨‍💼',
         });
 
-        // Redirect after toast shows
+        // Redirect after toast
         setTimeout(() => {
           navigate('/admin/dashboard', { replace: true });
-        }, 2000);
+        }, 2200);
       } else {
-        toast.error(data.message || 'Login failed', { duration: 3000 });
+        toast.error(data.message || 'Login failed', { duration: 4000 });
         setLoading(false);
       }
     } catch (err) {
-      console.error('Admin login error:', err);
-      toast.error('Network error. Please check if the server is running.', { duration: 3000 });
+      console.error('Admin login network error:', err);
+      toast.error('Network error. Is the backend server running on port 5000?', { duration: 5000 });
       setLoading(false);
     }
   };

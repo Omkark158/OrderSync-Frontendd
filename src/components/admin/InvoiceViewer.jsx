@@ -1,7 +1,7 @@
-// components/admin/InvoiceViewer.jsx - Complete invoice viewer
+// components/admin/InvoiceViewer.jsx - COMPLETE VERSION WITH TOAST
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Download, Printer, Share2, Mail } from 'lucide-react';
+import { ArrowLeft, Download, Printer, Share2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const InvoiceViewer = () => {
@@ -10,15 +10,23 @@ const InvoiceViewer = () => {
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const getToken = () => {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+      toast.error('Admin session expired. Please login again.');
+      navigate('/admin/secure-access');
+      return null;
+    }
+    return token;
+  };
+
   useEffect(() => {
     fetchInvoice();
   }, [invoiceId]);
 
-  const getToken = () => {
-    return localStorage.getItem('adminToken') || localStorage.getItem('token');
-  };
-
   const fetchInvoice = async () => {
+    const loadingToast = toast.loading('Loading invoice...');
+    setLoading(true);
     try {
       const token = getToken();
       const response = await fetch(`/api/invoices/${invoiceId}`, {
@@ -27,16 +35,28 @@ const InvoiceViewer = () => {
         },
       });
 
+      if (!response.ok) {
+        if (response.status === 404) {
+          toast.dismiss(loadingToast);
+          toast.error('Invoice not found');
+          return;
+        }
+        throw new Error('Failed to load invoice');
+      }
+
       const data = await response.json();
+      toast.dismiss(loadingToast);
       
       if (data.success) {
         setInvoice(data.data);
+        toast.success('Invoice loaded successfully');
       } else {
         toast.error(data.message || 'Failed to load invoice');
       }
     } catch (error) {
-      console.error('Failed to load invoice:', error);
-      toast.error('Failed to load invoice');
+      console.error('Fetch invoice error:', error);
+      toast.dismiss(loadingToast);
+      toast.error('Error loading invoice');
     } finally {
       setLoading(false);
     }
@@ -47,9 +67,7 @@ const InvoiceViewer = () => {
     try {
       const token = getToken();
       const response = await fetch(`/api/invoices/${invoiceId}/download`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!response.ok) throw new Error('Download failed');
@@ -58,11 +76,9 @@ const InvoiceViewer = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Invoice_${invoice.invoiceNumber}.pdf`;
-      document.body.appendChild(link);
+      link.download = `Invoice_${invoice?.invoiceNumber || invoiceId}.pdf`;
       link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      URL.revokeObjectURL(url);
 
       toast.dismiss(loadingToast);
       toast.success('Invoice downloaded!');
@@ -72,24 +88,76 @@ const InvoiceViewer = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    const loadingToast = toast.loading('Preparing invoice for printing...');
+
+    try {
+      const token = getToken();
+      if (!token) throw new Error('No token');
+
+      const response = await fetch(`/api/invoices/${invoiceId}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to load PDF');
+      }
+
+      const blob = await response.blob();
+      if (blob.size === 0) throw new Error('Empty PDF file');
+
+      const pdfUrl = URL.createObjectURL(blob);
+
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = pdfUrl;
+      document.body.appendChild(iframe);
+
+      iframe.onload = () => {
+        toast.dismiss(loadingToast);
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (e) {
+          toast.error('Print blocked. Please allow popups or try manually.');
+        }
+
+        // Cleanup
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+          URL.revokeObjectURL(pdfUrl);
+        }, 3000);
+      };
+
+      iframe.onerror = () => {
+        throw new Error('PDF failed to load');
+      };
+
+    } catch (error) {
+      toast.dismiss(loadingToast);
+      toast.error(error.message || 'Failed to print invoice');
+      console.error('Print error:', error);
+    }
   };
 
   const handleShare = () => {
-    if (!invoice) return;
-    
-    const url = `${window.location.origin}/api/invoices/${invoiceId}/download`;
+    const publicUrl = `${window.location.origin}/api/invoices/${invoiceId}/download`;
     
     if (navigator.share) {
       navigator.share({
-        title: `Invoice ${invoice.invoiceNumber}`,
-        text: `Invoice for ₹${invoice.totalAmount}`,
-        url: url,
-      }).catch(err => console.log('Share failed:', err));
+        title: `Invoice ${invoice?.invoiceNumber}`,
+        text: 'Your invoice from Sachin Foods',
+        url: publicUrl,
+      }).catch(() => {
+        navigator.clipboard.writeText(publicUrl);
+        toast.success('Link copied!');
+      });
     } else {
-      navigator.clipboard.writeText(url);
-      toast.success('Invoice link copied to clipboard');
+      navigator.clipboard.writeText(publicUrl);
+      toast.success('Public download link copied!');
     }
   };
 
@@ -122,10 +190,10 @@ const InvoiceViewer = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
+      <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading invoice...</p>
+          <p className="text-gray-600 font-medium">Loading invoice...</p>
         </div>
       </div>
     );
@@ -133,13 +201,13 @@ const InvoiceViewer = () => {
 
   if (!invoice) {
     return (
-      <div className="p-6 text-center">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Invoice not found</h2>
+      <div className="p-6 max-w-3xl mx-auto text-center">
+        <h2 className="text-2xl font-bold text-red-600 mb-4">Invoice Not Found</h2>
         <button
-          onClick={() => navigate(-1)}
-          className="px-4 py-2 bg-red-600 text-white rounded-lg"
+          onClick={() => navigate('/admin/invoices')}
+          className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
         >
-          Go Back
+          Back to Invoices
         </button>
       </div>
     );
@@ -150,31 +218,31 @@ const InvoiceViewer = () => {
       {/* Header with Actions */}
       <div className="flex items-center justify-between mb-6">
         <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+          onClick={() => navigate('/admin/invoices')}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft size={20} />
-          <span className="font-medium">Back</span>
+          <span className="font-medium">Back to Invoices</span>
         </button>
 
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <button
             onClick={handleDownload}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
           >
             <Download size={18} />
-            Download
+            Download PDF
           </button>
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
           >
             <Printer size={18} />
             Print
           </button>
           <button
             onClick={handleShare}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
           >
             <Share2 size={18} />
             Share
@@ -182,10 +250,10 @@ const InvoiceViewer = () => {
         </div>
       </div>
 
-      {/* Invoice Card */}
-      <div className="bg-white rounded-lg shadow-md p-8">
+      {/* Invoice Content */}
+      <div className="bg-white rounded-lg shadow-md p-8 print:shadow-none print:p-0">
         {/* Header */}
-        <div className="flex items-start justify-between mb-8 pb-6 border-b-2">
+        <div className="flex items-start justify-between mb-8 pb-6 border-b-2 print:border-b-2 print:pb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">SACHIN FOODS</h1>
             <p className="text-gray-600">Kundara, Kollam, Kerala</p>

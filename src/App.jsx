@@ -26,6 +26,8 @@ import AdminOrders from './components/admin/AdminOrders';
 import AdminMenuManager from './components/admin/MenuManager';
 import OrderManager from './components/admin/OrderManager';
 import InvoiceViewer from './components/admin/InvoiceViewer';
+import AdminInvoices from './components/admin/AdminInvoices'; 
+
 
 // Payment
 import PaymentSuccess from './components/payment/PaymentSuccess';
@@ -166,6 +168,19 @@ function App() {
             } />
 
             {/* ✅ Invoice Viewer Route */}
+            <Route path="/admin/invoices/:invoiceId" element={
+              <AdminRoute>
+                <InvoiceViewer />
+              </AdminRoute>
+            } />
+
+
+            <Route path="/admin/invoices" element={
+              <AdminRoute>
+                <AdminInvoices />
+              </AdminRoute>
+            } />
+
             <Route path="/admin/invoices/:invoiceId" element={
               <AdminRoute>
                 <InvoiceViewer />

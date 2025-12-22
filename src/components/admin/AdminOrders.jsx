@@ -1,10 +1,10 @@
 // ============================================
-// AdminOrders.jsx - FIXED with Toast Notifications
+// AdminOrders.jsx 
 // ============================================
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Phone, MapPin, Clock, FileText } from 'lucide-react';
-import toast from 'react-hot-toast'; // ✅ Import toast
+import { Calendar, Phone, MapPin, Clock, FileText, ArrowLeft } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const AdminOrders = () => {
   const navigate = useNavigate();
@@ -22,7 +22,7 @@ const AdminOrders = () => {
       const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
       
       if (!token) {
-        toast.error('Authentication required'); // ✅ Toast
+        toast.error('Authentication required');
         navigate('/admin/secure-access');
         return;
       }
@@ -43,7 +43,7 @@ const AdminOrders = () => {
       
       if (!response.ok) {
         if (response.status === 401) {
-          toast.error('Session expired. Please login again'); // ✅ Toast
+          toast.error('Session expired. Please login again');
           localStorage.removeItem('adminToken');
           localStorage.removeItem('adminUser');
           navigate('/admin/secure-access');
@@ -58,16 +58,16 @@ const AdminOrders = () => {
       if (data.success) {
         setOrders(data.data || []);
         if (data.data && data.data.length > 0) {
-          toast.success(`Loaded ${data.data.length} orders`); // ✅ Toast
+          toast.success(`Loaded ${data.data.length} orders`);
         }
       } else {
         console.error('Failed to fetch orders:', data.message);
-        toast.error(data.message || 'Failed to fetch orders'); // ✅ Toast
+        toast.error(data.message || 'Failed to fetch orders');
         setOrders([]);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
-      toast.error('Error loading orders. Please try again.'); // ✅ Toast
+      toast.error('Error loading orders. Please try again.');
       setOrders([]);
     } finally {
       setLoading(false);
@@ -109,9 +109,20 @@ const AdminOrders = () => {
 
   return (
     <div className="p-6">
+      {/* Back Button */}
+      <div className="mb-6">
+        <button
+          onClick={() => navigate('/admin/dashboard')}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors mb-4"
+        >
+          <ArrowLeft size={20} />
+          <span className="font-medium">Back</span>
+        </button>
+      </div>
+
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Orders Management</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Order Management</h1>
         <p className="text-gray-600 mt-1">
           View and manage all customer orders
         </p>
@@ -125,7 +136,7 @@ const AdminOrders = () => {
               key={status}
               onClick={() => {
                 setStatusFilter(status);
-                toast.loading(`Loading ${status} orders...`, { duration: 500 }); // ✅ Toast
+                toast.loading(`Loading ${status} orders...`, { duration: 500 });
               }}
               className={`px-4 py-2 rounded-lg capitalize whitespace-nowrap font-medium transition-colors ${
                 statusFilter === status
@@ -257,7 +268,7 @@ const AdminOrders = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
-                      toast.loading('Loading order details...', { duration: 300 }); // ✅ Toast
+                      toast.loading('Loading order details...', { duration: 300 });
                       navigate(`/admin/orders/${order._id}`);
                     }}
                     className="px-4 py-2 border-2 border-red-600 text-red-600 rounded-lg hover:bg-red-50 font-semibold transition-colors"
@@ -267,7 +278,7 @@ const AdminOrders = () => {
                   {!order.invoiceGenerated && order.orderStatus === 'confirmed' && (
                     <button
                       onClick={() => {
-                        toast.info('Navigate to order to generate invoice'); // ✅ Toast
+                        toast.info('Navigate to order to generate invoice');
                         navigate(`/admin/orders/${order._id}`);
                       }}
                       className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors"

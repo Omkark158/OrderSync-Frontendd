@@ -27,7 +27,7 @@ const NotFound = () => {
 
         {/* Actions */}
         <div className="flex gap-4 justify-center">
-          <button
+          {/* <button
             onClick={() => navigate(-1)}
             className="btn-secondary flex items-center gap-2"
           >
@@ -40,11 +40,11 @@ const NotFound = () => {
           >
             <Home size={18} />
             Go Home
-          </button>
+          </button> */}
         </div>
 
         {/* Quick Links */}
-        <div className="mt-12 pt-8 border-t border-slate-200">
+        {/* <div className="mt-12 pt-8 border-t border-slate-200">
           <p className="text-sm text-slate-600 mb-4">Quick Links:</p>
           <div className="flex gap-4 justify-center flex-wrap">
             <button onClick={() => navigate('/menu')} className="text-blue-600 hover:underline">
@@ -57,7 +57,7 @@ const NotFound = () => {
               My Profile
             </button>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   );
