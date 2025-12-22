@@ -1,6 +1,4 @@
-// ============================================
-// 7. Navbar.jsx - Navigation Bar
-// ============================================
+// components/common/Navbar.jsx - Conditional navbar based on login
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ShoppingCart, User, Menu as MenuIcon, X, LogOut, Package } from 'lucide-react';
@@ -28,13 +26,25 @@ const Navbar = () => {
     const cart = JSON.parse(localStorage.getItem('cart') || '[]');
     setCartCount(cart.reduce((sum, item) => sum + item.quantity, 0));
 
+    // Listen for cart updates
+    const handleCartUpdate = () => {
+      const updatedCart = JSON.parse(localStorage.getItem('cart') || '[]');
+      setCartCount(updatedCart.reduce((sum, item) => sum + item.quantity, 0));
+    };
+
+    window.addEventListener('cartUpdated', handleCartUpdate);
+
     // Handle scroll effect
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
     };
 
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('cartUpdated', handleCartUpdate);
+    };
   }, [location]);
 
   const handleLogout = () => {
@@ -52,6 +62,46 @@ const Navbar = () => {
     { path: '/orders', label: 'My Orders' },
   ];
 
+  // ✅ If not logged in on home page, show minimal navbar
+  if (!user && location.pathname === '/') {
+    return (
+      <nav className={`sticky top-0 z-40 transition-all duration-300 ${
+        isScrolled ? 'bg-white shadow-md' : 'bg-white'
+      }`}>
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo Only */}
+            <Link to="/" className="flex items-center gap-2">
+              <div className="bg-red-600 text-white p-2 rounded-lg">
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                </svg>
+              </div>
+              <span className="text-xl font-bold text-gray-900">Sachin Foods</span>
+            </Link>
+
+            {/* Login/Signup Buttons */}
+            <div className="flex items-center gap-3">
+              <Link
+                to="/login"
+                className="px-6 py-2 text-red-600 font-medium hover:bg-red-50 rounded-lg transition-colors"
+              >
+                Login
+              </Link>
+              <Link
+                to="/signup"
+                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                Sign Up
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
+  // ✅ Full navbar for logged-in users or non-home pages
   return (
     <nav 
       className={`sticky top-0 z-40 transition-all duration-300 ${
@@ -90,17 +140,19 @@ const Navbar = () => {
           {/* Right Side Icons */}
           <div className="flex items-center gap-4">
             {/* Cart */}
-            <Link
-              to="/cart"
-              className="relative p-2 text-gray-700 hover:text-red-600 transition-colors"
-            >
-              <ShoppingCart size={24} />
-              {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                  {cartCount}
-                </span>
-              )}
-            </Link>
+            {user && (
+              <Link
+                to="/cart"
+                className="relative p-2 text-gray-700 hover:text-red-600 transition-colors"
+              >
+                <ShoppingCart size={24} />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                )}
+              </Link>
+            )}
 
             {/* User Menu */}
             {user ? (
@@ -174,7 +226,7 @@ const Navbar = () => {
                     handleLogout();
                     setIsMenuOpen(false);
                   }}
-                  className="flex items-center gap-2 py-2 text-red-600 font-medium"
+                  className="flex items-center gap-2 py-2 text-red-600 font-medium w-full"
                 >
                   <LogOut size={20} />
                   <span>Logout</span>

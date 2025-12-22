@@ -1,4 +1,5 @@
-// src/components/admin/OrderManager.jsx
+// src/components/admin/OrderManager.jsx - FULLY FIXED VERSION
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
+import { invoiceService } from '../../services/invoiceService'; // ← NEW IMPORT
 
 const OrderManager = () => {
   const { orderId } = useParams();
@@ -24,6 +26,7 @@ const OrderManager = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(null);
 
   const isAdmin = user?.role === 'admin';
 
@@ -58,128 +61,202 @@ const OrderManager = () => {
 
   // Confirm Order (Pending → Confirmed)
   const confirmOrder = async () => {
-    if (!window.confirm('Confirm this order? Customer will be notified via SMS.')) return;
-    setUpdating(true);
-    try {
-      const token = getToken();
-      const res = await fetch(`/api/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ orderStatus: 'confirmed' }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('Order confirmed!');
-        await fetch('/api/sms/order-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            phone: order.customerPhone,
-            orderNumber: order.orderNumber,
-            status: 'confirmed',
-          }),
-        });
-        toast.success('Confirmation SMS sent');
-        fetchOrderDetails();
-      } else toast.error(data.message || 'Failed');
-    } catch (err) {
-      toast.error('Error confirming order');
-    } finally {
-      setUpdating(false);
-    }
+    setShowConfirmModal({
+      title: 'Confirm Order',
+      message: 'Are you sure you want to confirm this order? Customer will be notified via SMS.',
+      onConfirm: async () => {
+        setUpdating(true);
+        const loadingToast = toast.loading('Confirming order...');
+        try {
+          const token = getToken();
+          const res = await fetch(`/api/orders/${orderId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ orderStatus: 'confirmed' }),
+          });
+          const data = await res.json();
+          toast.dismiss(loadingToast);
+          
+          if (data.success) {
+            toast.success('Order confirmed successfully!');
+            
+            const smsToast = toast.loading('Sending confirmation SMS...');
+            try {
+              await fetch('/api/sms/order-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                  phone: order.customerPhone,
+                  orderNumber: order.orderNumber,
+                  status: 'confirmed',
+                }),
+              });
+              toast.dismiss(smsToast);
+              toast.success('Confirmation SMS sent successfully!');
+            } catch (smsErr) {
+              toast.dismiss(smsToast);
+              toast.error('Failed to send SMS notification');
+            }
+            
+            fetchOrderDetails();
+          } else {
+            toast.error(data.message || 'Failed to confirm order');
+          }
+        } catch (err) {
+          toast.dismiss(loadingToast);
+          toast.error('Error confirming order');
+        } finally {
+          setUpdating(false);
+        }
+      },
+    });
   };
 
   // Deny / Cancel Order
   const denyOrder = async () => {
-    const reason = window.prompt('Enter reason for denying the order:');
-    if (!reason) return;
-    if (!window.confirm('Deny this order? Customer will be notified.')) return;
-
-    setUpdating(true);
-    try {
-      const token = getToken();
-      const res = await fetch(`/api/orders/${orderId}/cancel`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ reason }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('Order denied');
-        await fetch('/api/sms/order-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            phone: order.customerPhone,
-            orderNumber: order.orderNumber,
-            status: 'cancelled',
-          }),
-        });
-        toast.success('Cancellation SMS sent');
-        fetchOrderDetails();
-      } else toast.error(data.message || 'Failed');
-    } catch (err) {
-      toast.error('Error denying order');
-    } finally {
-      setUpdating(false);
-    }
+    setShowConfirmModal({
+      title: 'Deny Order',
+      message: 'Enter reason for denying this order:',
+      requiresInput: true,
+      inputPlaceholder: 'e.g., Out of stock, Invalid address...',
+      onConfirm: async (reason) => {
+        if (!reason?.trim()) {
+          toast.error('Please provide a reason');
+          return;
+        }
+        
+        setUpdating(true);
+        const loadingToast = toast.loading('Denying order...');
+        try {
+          const token = getToken();
+          const res = await fetch(`/api/orders/${orderId}/cancel`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ reason }),
+          });
+          const data = await res.json();
+          toast.dismiss(loadingToast);
+          
+          if (data.success) {
+            toast.success('Order denied successfully');
+            
+            const smsToast = toast.loading('Sending cancellation SMS...');
+            try {
+              await fetch('/api/sms/order-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                  phone: order.customerPhone,
+                  orderNumber: order.orderNumber,
+                  status: 'cancelled',
+                }),
+              });
+              toast.dismiss(smsToast);
+              toast.success('Cancellation SMS sent successfully!');
+            } catch (smsErr) {
+              toast.dismiss(smsToast);
+              toast.error('Failed to send SMS notification');
+            }
+            
+            fetchOrderDetails();
+          } else {
+            toast.error(data.message || 'Failed to deny order');
+          }
+        } catch (err) {
+          toast.dismiss(loadingToast);
+          toast.error('Error denying order');
+        } finally {
+          setUpdating(false);
+        }
+      },
+    });
   };
 
   // Update Status (preparing, ready, delivered)
   const updateOrderStatus = async (newStatus) => {
-    if (!window.confirm(`Change status to "${newStatus}"?`)) return;
-    setUpdating(true);
-    try {
-      const token = getToken();
-      const res = await fetch(`/api/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ orderStatus: newStatus }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('Status updated!');
-        await fetch('/api/sms/order-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            phone: order.customerPhone,
-            orderNumber: order.orderNumber,
-            status: newStatus,
-          }),
-        });
-        toast.success('Status SMS sent');
-        fetchOrderDetails();
-      } else toast.error(data.message || 'Failed');
-    } catch (err) {
-      toast.error('Error updating status');
-    } finally {
-      setUpdating(false);
-    }
+    setShowConfirmModal({
+      title: 'Update Order Status',
+      message: `Change order status to "${newStatus}"?`,
+      onConfirm: async () => {
+        setUpdating(true);
+        const loadingToast = toast.loading('Updating status...');
+        try {
+          const token = getToken();
+          const res = await fetch(`/api/orders/${orderId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ orderStatus: newStatus }),
+          });
+          const data = await res.json();
+          toast.dismiss(loadingToast);
+          
+          if (data.success) {
+            toast.success(`Status updated to ${newStatus}!`);
+            
+            const smsToast = toast.loading('Sending status update SMS...');
+            try {
+              await fetch('/api/sms/order-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
+                  phone: order.customerPhone,
+                  orderNumber: order.orderNumber,
+                  status: newStatus,
+                }),
+              });
+              toast.dismiss(smsToast);
+              toast.success('Status update SMS sent successfully!');
+            } catch (smsErr) {
+              toast.dismiss(smsToast);
+              toast.error('Failed to send SMS notification');
+            }
+            
+            fetchOrderDetails();
+          } else {
+            toast.error(data.message || 'Failed to update status');
+          }
+        } catch (err) {
+          toast.dismiss(loadingToast);
+          toast.error('Error updating status');
+        } finally {
+          setUpdating(false);
+        }
+      },
+    });
   };
 
-  // Delete Order (only delivered or cancelled)
+  // Delete Order
   const deleteOrder = async () => {
-    if (!window.confirm('⚠️ Permanently delete this order? This cannot be undone!')) return;
-    try {
-      const token = getToken();
-      const res = await fetch(`/api/orders/${orderId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success('Order deleted');
-        navigate('/admin/orders');
-      } else toast.error(data.message || 'Failed');
-    } catch (err) {
-      toast.error('Error deleting order');
-    }
+    setShowConfirmModal({
+      title: 'Delete Order',
+      message: '⚠️ Permanently delete this order? This action cannot be undone!',
+      isDangerous: true,
+      onConfirm: async () => {
+        const loadingToast = toast.loading('Deleting order...');
+        try {
+          const token = getToken();
+          const res = await fetch(`/api/orders/${orderId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json();
+          toast.dismiss(loadingToast);
+          if (data.success) {
+            toast.success('Order deleted');
+            navigate('/admin/orders');
+          } else {
+            toast.error(data.message || 'Failed to delete order');
+          }
+        } catch (err) {
+          toast.dismiss(loadingToast);
+          toast.error('Error deleting order');
+        }
+      },
+    });
   };
 
   // Generate Invoice
   const generateInvoice = async () => {
-    if (!window.confirm('Generate invoice for this order?')) return;
     const loadingToast = toast.loading('Generating invoice...');
     setGeneratingInvoice(true);
     try {
@@ -210,15 +287,31 @@ const OrderManager = () => {
     }
   };
 
-  // Invoice Actions
-  const viewInvoice = () => {
-    window.open(`/api/invoices/${order.invoice}/view`, '_blank');
+  // ✅ FIXED: View Invoice - Now sends token and opens PDF properly
+  const viewInvoice = async () => {
+    try {
+      await invoiceService.viewInvoice(order.invoice);
+    } catch (error) {
+      toast.error('Failed to open invoice. Please try again.');
+      console.error('View invoice error:', error);
+    }
   };
 
-  const downloadInvoice = () => {
-    window.open(`/api/invoices/${order.invoice}/download`, '_blank');
+  // ✅ FIXED: Download Invoice - Now sends token and downloads correctly
+  const downloadInvoice = async () => {
+    const loadingToast = toast.loading('Downloading invoice...');
+    try {
+      await invoiceService.downloadInvoice(order.invoice);
+      toast.dismiss(loadingToast);
+      toast.success('Invoice downloaded successfully!');
+    } catch (error) {
+      toast.dismiss(loadingToast);
+      toast.error('Failed to download invoice');
+      console.error('Download invoice error:', error);
+    }
   };
 
+  // Share via WhatsApp (public link - no auth needed)
   const shareInvoiceWhatsApp = () => {
     const phone = order.customerPhone.replace(/^\+91/, '').replace(/\s/g, '');
     const invoiceUrl = `${window.location.origin}/api/invoices/${order.invoice}/download`;
@@ -228,45 +321,49 @@ const OrderManager = () => {
     window.open(`https://wa.me/91${phone}?text=${message}`, '_blank');
   };
 
-  // In OrderManager.jsx - Updated sendInvoiceSMS function
-const sendInvoiceSMS = async () => {
-  if (!window.confirm('Send invoice link via SMS?')) return;
-  
-  const loadingToast = toast.loading('Sending SMS...');
+  // Send Invoice via SMS
+  const sendInvoiceSMS = async () => {
+    setShowConfirmModal({
+      title: 'Send Invoice via SMS',
+      message: 'Send invoice download link to customer via SMS?',
+      onConfirm: async () => {
+        const loadingToast = toast.loading('Sending SMS...');
+        try {
+          const token = getToken();
+          const invoiceUrl = `${window.location.origin}/api/invoices/${order.invoice}/download`;
 
-  try {
-    const token = getToken();
-    const invoiceUrl = `${window.location.origin}/api/invoices/${order.invoice}/download`;
+          const response = await fetch('/api/sms/send-invoice', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              phone: order.customerPhone,
+              orderNumber: order.orderNumber,
+              invoiceUrl,
+              customerName: order.customerName,
+              totalAmount: order.totalAmount,
+            }),
+          });
 
-    const response = await fetch('/api/sms/send-invoice', {  // Correct endpoint
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
+          const data = await response.json();
+          toast.dismiss(loadingToast);
+
+          if (data.success) {
+            toast.success('Invoice SMS sent successfully!');
+          } else {
+            toast.error(data.message || 'Failed to send SMS');
+          }
+        } catch (err) {
+          toast.dismiss(loadingToast);
+          toast.error('Error sending SMS');
+          console.error('SMS Error:', err);
+        }
       },
-      body: JSON.stringify({
-        phone: order.customerPhone,
-        orderNumber: order.orderNumber,
-        invoiceUrl,
-        customerName: order.customerName,
-        totalAmount: order.totalAmount,
-      }),
     });
+  };
 
-    const data = await response.json();
-    toast.dismiss(loadingToast);
-
-    if (data.success) {
-      toast.success('Invoice SMS sent successfully!');
-    } else {
-      toast.error(data.message || 'Failed to send SMS');
-    }
-  } catch (err) {
-    toast.dismiss(loadingToast);
-    toast.error('Error sending SMS');
-    console.error('SMS Error:', err);
-  }
-};
   const formatDate = (date) =>
     new Date(date).toLocaleString('en-IN', {
       day: '2-digit',
@@ -312,7 +409,13 @@ const sendInvoiceSMS = async () => {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
+      {showConfirmModal && (
+        <ConfirmModal
+          {...showConfirmModal}
+          onClose={() => setShowConfirmModal(null)}
+        />
+      )}
+
       <div className="flex justify-between items-center mb-6">
         <button
           onClick={() => navigate('/admin/orders')}
@@ -519,6 +622,55 @@ const sendInvoiceSMS = async () => {
             )}
           </>
         )}
+      </div>
+    </div>
+  );
+};
+
+// Confirmation Modal Component
+const ConfirmModal = ({ title, message, onConfirm, onClose, requiresInput, inputPlaceholder, isDangerous }) => {
+  const [inputValue, setInputValue] = useState('');
+
+  const handleConfirm = () => {
+    onConfirm(requiresInput ? inputValue : undefined);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <h3 className="text-xl font-bold mb-3">{title}</h3>
+        <p className="text-gray-600 mb-6">{message}</p>
+
+        {requiresInput && (
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={inputPlaceholder}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg mb-6 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            autoFocus
+          />
+        )}
+
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            className={`px-5 py-2.5 rounded-lg font-medium text-white ${
+              isDangerous
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+          >
+            Confirm
+          </button>
+        </div>
       </div>
     </div>
   );

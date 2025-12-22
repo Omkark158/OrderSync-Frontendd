@@ -1,8 +1,7 @@
-// pages/user/OrderHistory.jsx - FIXED with proper order loading
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrder } from '../../context/OrderContext';
-import { Calendar, Phone, MapPin, FileText, Clock, Package } from 'lucide-react';
+import { Calendar, Phone, Clock, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const OrderHistory = () => {
@@ -10,7 +9,6 @@ const OrderHistory = () => {
   const { orders, loading, fetchOrders } = useOrder();
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // ✅ Load orders on mount
   useEffect(() => {
     console.log('📦 OrderHistory: Loading orders...');
     loadOrders();
@@ -24,11 +22,6 @@ const OrderHistory = () => {
       console.error('❌ Failed to load orders:', result.message);
     }
   };
-
-  // ✅ Log orders for debugging
-  useEffect(() => {
-    console.log('📊 Orders state:', orders);
-  }, [orders]);
 
   const formatDate = (date) => {
     return new Date(date).toLocaleString('en-IN', {
@@ -55,6 +48,12 @@ const OrderHistory = () => {
   const filteredOrders = statusFilter === 'all'
     ? orders
     : orders.filter(order => order.orderStatus === statusFilter);
+
+  // Handle card click - navigate to order details
+  const handleOrderClick = (orderId) => {
+    toast.loading('Loading order details...', { duration: 300 });
+    navigate(`/orders/${orderId}`);
+  };
 
   if (loading) {
     return (
@@ -124,12 +123,14 @@ const OrderHistory = () => {
             {filteredOrders.map((order) => (
               <div
                 key={order._id}
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-all border border-gray-100"
+                className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow border border-gray-100"
               >
                 {/* Order Header */}
                 <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">{order.orderNumber}</h3>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-gray-900">
+                      {order.orderNumber}
+                    </h3>
                     <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
                       <Clock size={14} />
                       Placed {formatDate(order.createdAt)}
@@ -144,7 +145,7 @@ const OrderHistory = () => {
                   </span>
                 </div>
 
-                {/* Customer & Pickup Info */}
+                {/* Customer & Delivery Info */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 pb-4 border-b border-gray-200">
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Customer</p>
@@ -157,7 +158,7 @@ const OrderHistory = () => {
                   <div>
                     <p className="text-sm text-gray-600 mb-1 flex items-center gap-1">
                       <Calendar size={14} className="text-red-600" />
-                      Pickup Time
+                      Delivery Time
                     </p>
                     <p className="font-semibold text-red-600">
                       {formatDate(order.orderDateTime)}
@@ -170,8 +171,8 @@ const OrderHistory = () => {
                   </div>
                 </div>
 
-                {/* Order Items */}
-                <div className="mb-4 pb-4 border-b border-gray-200">
+                {/* Order Items Preview */}
+                <div className="mb-4">
                   <p className="text-sm font-medium text-gray-700 mb-3">Order Items:</p>
                   <div className="space-y-2">
                     {order.orderItems.slice(0, 3).map((item, idx) => (
@@ -186,56 +187,38 @@ const OrderHistory = () => {
                       </div>
                     ))}
                     {order.orderItems.length > 3 && (
-                      <p className="text-sm text-blue-600 font-medium cursor-pointer hover:underline">
+                      <p className="text-sm text-blue-600 font-medium">
                         +{order.orderItems.length - 3} more items
                       </p>
                     )}
                   </div>
                 </div>
 
-                {/* Total & Actions */}
-                <div className="flex items-center justify-between">
+                {/* Total Amount Section */}
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                   <div>
                     <p className="text-sm text-gray-600">Total Amount</p>
                     <p className="text-2xl font-bold text-red-600">₹{order.totalAmount}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <p className="text-xs text-gray-500">
-                        Payment: <span className={`font-semibold ${
-                          order.paymentStatus === 'completed' ? 'text-green-600' :
-                          order.paymentStatus === 'partial' ? 'text-orange-600' :
-                          'text-red-600'
-                        }`}>
-                          {order.paymentStatus.toUpperCase()}
-                        </span>
-                      </p>
-                      {order.advancePayment > 0 && (
-                        <p className="text-xs text-gray-500">
-                          Paid: <span className="font-semibold text-green-600">₹{order.advancePayment}</span>
-                        </p>
-                      )}
-                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        toast.loading('Loading order details...', { duration: 300 });
-                        navigate(`/orders/${order._id}`);
-                      }}
-                      className="px-4 py-2 border-2 border-red-600 text-red-600 rounded-lg hover:bg-red-50 font-semibold transition-colors"
-                    >
-                      View Details
-                    </button>
-                    {order.invoiceGenerated && (
-                      <button
-                        onClick={() => {
-                          toast.info('Opening invoice...', { duration: 300 });
-                          navigate(`/orders/${order._id}`);
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold transition-colors"
-                      >
-                        <FileText size={16} />
-                        Invoice
-                      </button>
+                  <div className="text-right">
+                    <p className="text-xs text-gray-500 mb-1">
+                      Payment: <span className={`font-semibold ${
+                        order.paymentStatus === 'completed' ? 'text-green-600' :
+                        order.paymentStatus === 'partial' ? 'text-orange-600' :
+                        'text-red-600'
+                      }`}>
+                        {order.paymentStatus.toUpperCase()}
+                      </span>
+                    </p>
+                    {order.advancePayment > 0 && (
+                      <p className="text-xs text-gray-500">
+                        Paid: <span className="font-semibold text-green-600">₹{order.advancePayment}</span>
+                      </p>
+                    )}
+                    {order.remainingAmount > 0 && (
+                      <p className="text-xs text-gray-500">
+                        Due: <span className="font-semibold text-orange-600">₹{order.remainingAmount}</span>
+                      </p>
                     )}
                   </div>
                 </div>

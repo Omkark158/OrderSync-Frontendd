@@ -110,43 +110,60 @@ export const invoiceService = {
   },
 
   // ✅ View Invoice in new tab
-  viewInvoice: async (invoiceId) => {
-    try {
-      const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-      
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      const baseURL = api.defaults.baseURL || 'http://localhost:5000/api';
-      const url = `${baseURL}/invoices/${invoiceId}/view`;
-      
-      console.log('👁️ Opening invoice in new tab:', url);
-      
-      // Create form to POST with token (for better security)
-      const form = document.createElement('form');
-      form.method = 'GET';
-      form.action = url;
-      form.target = '_blank';
-      
-      // Add hidden input with token
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = 'token';
-      input.value = token;
-      form.appendChild(input);
-      
-      document.body.appendChild(form);
-      form.submit();
-      document.body.removeChild(form);
-      
-      return { success: true };
-      
-    } catch (error) {
-      console.error('❌ View error:', error);
-      throw error;
+  // ✅ FINAL WORKING VERSION -  (opens PDF in new tab with auth)
+viewInvoice: async (invoiceId) => {
+  try {
+    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+    if (!token) {
+      throw new Error('Authentication required. Please log in again.');
     }
-  },
+
+    // Build correct URL
+    const baseURL = api.defaults.baseURL || 'http://localhost:5000/api';
+    const url = `${baseURL.replace(/\/api$/, '')}/api/invoices/${invoiceId}/view`;
+
+    console.log('Viewing invoice from:', url);
+
+    // Fetch PDF with proper Authorization header
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to load PDF: ${response.status} ${response.statusText}\n${errorText}`);
+    }
+
+    const blob = await response.blob();
+
+    // Create temporary URL and open in new tab
+    const blobUrl = window.URL.createObjectURL(blob);
+    const newWindow = window.open(blobUrl, '_blank');
+
+    if (!newWindow) {
+      toast.error('Popup blocked! Please allow popups for this site.');
+      // Fallback: trigger download
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `Invoice_${invoiceId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Clean up after 30 seconds
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 30000);
+
+    return { success: true };
+  } catch (error) {
+    console.error('View invoice error:', error);
+    toast.error('Failed to open invoice');
+    throw error;
+  }
+},
 
   // Update Payment Status (Admin)
   updatePaymentStatus: async (invoiceId, receivedAmount) => {

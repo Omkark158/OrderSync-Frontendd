@@ -1,4 +1,4 @@
-// src/components/home/Features.jsx
+// src/components/home/Features.jsx - With hover shadow cards
 import { Award, Clock, PhoneCall } from 'lucide-react';
 
 const Features = () => {
@@ -36,12 +36,12 @@ const Features = () => {
           {features.map((feature, index) => (
             <div
               key={index}
-              className="text-center group hover:scale-105 transition-transform duration-300"
+              className="bg-white rounded-xl p-8 text-center border border-gray-100 shadow-md hover:shadow-2xl transition-all duration-300 group hover:-translate-y-2"
             >
-              <div className="inline-flex items-center justify-center w-20 h-20 bg-red-100 rounded-full mb-6 group-hover:bg-red-600 transition-colors">
-                <feature.icon className="w-10 h-10 text-red-600 group-hover:text-white transition-colors" />
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-red-100 rounded-full mb-6 group-hover:bg-red-600 transition-colors duration-300">
+                <feature.icon className="w-10 h-10 text-red-600 group-hover:text-white transition-colors duration-300" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">
+              <h3 className="text-xl font-semibold text-gray-900 mb-3 group-hover:text-red-600 transition-colors duration-300">
                 {feature.title}
               </h3>
               <p className="text-gray-600 leading-relaxed">
