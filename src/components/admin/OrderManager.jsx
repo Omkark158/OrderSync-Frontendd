@@ -1,4 +1,7 @@
-// src/components/admin/OrderManager.jsx
+
+// ============================================
+// src/components/admin/OrderManager.jsx - COMPLETE WITH PAYMENT
+// ============================================
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -11,8 +14,10 @@ import {
   CheckCircle,
   XCircle,
   Trash2,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import PaymentModal from './PaymentModal'; // ✅ ADDED
 import toast from 'react-hot-toast';
 
 const OrderManager = () => {
@@ -25,6 +30,7 @@ const OrderManager = () => {
   const [updating, setUpdating] = useState(false);
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const isAdmin = user?.role === 'admin';
 
@@ -57,7 +63,34 @@ const OrderManager = () => {
     }
   };
 
-  // Confirm Order (Pending → Confirmed)
+  // ✅ FIXED: Handle Payment Success
+  const handlePaymentSuccess = async (paymentData) => {
+    setShowPaymentModal(false);
+    toast.success('Payment successful! 🎉');
+
+    console.log('💰 Payment data received:', paymentData);
+
+    // Refresh order details to get updated payment info
+    await fetchOrderDetails();
+
+    // Note: SMS notifications are already sent by the backend
+    // in paymentController.js verifyPayment() -> sendPaymentNotifications()
+
+    // Auto-generate invoice if payment is complete and not yet generated
+    if (paymentData.order?.paymentStatus === 'completed' && !order.invoiceGenerated) {
+      const generateToast = toast.loading('Auto-generating invoice...');
+      try {
+        await generateInvoice();
+        toast.dismiss(generateToast);
+        toast.success('Invoice generated successfully!');
+      } catch (error) {
+        toast.dismiss(generateToast);
+        console.error('Auto-generate invoice error:', error);
+      }
+    }
+  };
+
+  // Confirm Order
   const confirmOrder = async () => {
     setShowConfirmModal({
       title: 'Confirm Order',
@@ -69,21 +102,27 @@ const OrderManager = () => {
           const token = getToken();
           const res = await fetch(`/api/orders/${orderId}/status`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
             body: JSON.stringify({ orderStatus: 'confirmed' }),
           });
           const data = await res.json();
           toast.dismiss(loadingToast);
-          
+
           if (data.success) {
             toast.success('Order confirmed successfully!');
-            
-            // Send SMS separately
+
+            // Send SMS
             const smsToast = toast.loading('Sending confirmation SMS...');
             try {
               await fetch('/api/sms/order-status', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
                 body: JSON.stringify({
                   phone: order.customerPhone,
                   orderNumber: order.orderNumber,
@@ -91,12 +130,12 @@ const OrderManager = () => {
                 }),
               });
               toast.dismiss(smsToast);
-              toast.success('Confirmation SMS sent successfully!');
+              toast.success('Confirmation SMS sent!');
             } catch (smsErr) {
               toast.dismiss(smsToast);
               toast.error('Failed to send SMS notification');
             }
-            
+
             fetchOrderDetails();
           } else {
             toast.error(data.message || 'Failed to confirm order');
@@ -111,7 +150,7 @@ const OrderManager = () => {
     });
   };
 
-  // Deny / Cancel Order
+  // Deny Order
   const denyOrder = async () => {
     setShowConfirmModal({
       title: 'Deny Order',
@@ -123,28 +162,34 @@ const OrderManager = () => {
           toast.error('Please provide a reason');
           return;
         }
-        
+
         setUpdating(true);
         const loadingToast = toast.loading('Denying order...');
         try {
           const token = getToken();
           const res = await fetch(`/api/orders/${orderId}/cancel`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
             body: JSON.stringify({ reason }),
           });
           const data = await res.json();
           toast.dismiss(loadingToast);
-          
+
           if (data.success) {
             toast.success('Order denied successfully');
-            
-            // Send SMS separately
+
+            // Send SMS
             const smsToast = toast.loading('Sending cancellation SMS...');
             try {
               await fetch('/api/sms/order-status', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
                 body: JSON.stringify({
                   phone: order.customerPhone,
                   orderNumber: order.orderNumber,
@@ -152,12 +197,12 @@ const OrderManager = () => {
                 }),
               });
               toast.dismiss(smsToast);
-              toast.success('Cancellation SMS sent successfully!');
+              toast.success('Cancellation SMS sent!');
             } catch (smsErr) {
               toast.dismiss(smsToast);
               toast.error('Failed to send SMS notification');
             }
-            
+
             fetchOrderDetails();
           } else {
             toast.error(data.message || 'Failed to deny order');
@@ -172,7 +217,7 @@ const OrderManager = () => {
     });
   };
 
-  // Update Status (preparing, ready, delivered)
+  // Update Status
   const updateOrderStatus = async (newStatus) => {
     setShowConfirmModal({
       title: 'Update Order Status',
@@ -184,21 +229,27 @@ const OrderManager = () => {
           const token = getToken();
           const res = await fetch(`/api/orders/${orderId}/status`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
             body: JSON.stringify({ orderStatus: newStatus }),
           });
           const data = await res.json();
           toast.dismiss(loadingToast);
-          
+
           if (data.success) {
             toast.success(`Status updated to ${newStatus}!`);
-            
-            // Send SMS separately
+
+            // Send SMS
             const smsToast = toast.loading('Sending status update SMS...');
             try {
               await fetch('/api/sms/order-status', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
                 body: JSON.stringify({
                   phone: order.customerPhone,
                   orderNumber: order.orderNumber,
@@ -206,12 +257,12 @@ const OrderManager = () => {
                 }),
               });
               toast.dismiss(smsToast);
-              toast.success('Status update SMS sent successfully!');
+              toast.success('Status SMS sent!');
             } catch (smsErr) {
               toast.dismiss(smsToast);
-              toast.error('Failed to send SMS notification');
+              toast.error('Failed to send SMS');
             }
-            
+
             fetchOrderDetails();
           } else {
             toast.error(data.message || 'Failed to update status');
@@ -232,36 +283,39 @@ const OrderManager = () => {
       title: 'Update Payment Status',
       message: `Mark payment as "${newStatus}"?`,
       onConfirm: async () => {
-        const loadingToast = toast.loading('Updating payment status...');
+        const loadingToast = toast.loading('Updating payment...');
         try {
           const token = getToken();
           const res = await fetch(`/api/orders/${orderId}/payment-status`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
             body: JSON.stringify({ paymentStatus: newStatus }),
           });
           const data = await res.json();
           toast.dismiss(loadingToast);
-          
+
           if (data.success) {
             toast.success(`Payment marked as ${newStatus}!`);
             fetchOrderDetails();
           } else {
-            toast.error(data.message || 'Failed to update payment status');
+            toast.error(data.message || 'Failed to update payment');
           }
         } catch (err) {
           toast.dismiss(loadingToast);
-          toast.error('Error updating payment status');
+          toast.error('Error updating payment');
         }
       },
     });
   };
 
-  // Delete Order (only delivered or cancelled)
+  // Delete Order
   const deleteOrder = async () => {
     setShowConfirmModal({
       title: 'Delete Order',
-      message: '⚠️ Permanently delete this order? This action cannot be undone!',
+      message: '⚠️ Permanently delete this order? This cannot be undone!',
       isDangerous: true,
       onConfirm: async () => {
         const loadingToast = toast.loading('Deleting order...');
@@ -277,7 +331,7 @@ const OrderManager = () => {
             toast.success('Order deleted');
             navigate('/admin/orders');
           } else {
-            toast.error(data.message || 'Failed to delete order');
+            toast.error(data.message || 'Failed to delete');
           }
         } catch (err) {
           toast.dismiss(loadingToast);
@@ -295,7 +349,10 @@ const OrderManager = () => {
       const token = getToken();
       const res = await fetch(`/api/invoices/generate/${orderId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           billingAddress: order.billingAddress || order.deliveryAddress,
           shippingAddress: order.deliveryAddress,
@@ -306,7 +363,7 @@ const OrderManager = () => {
       const data = await res.json();
       toast.dismiss(loadingToast);
       if (data.success) {
-        toast.success('Invoice generated successfully!');
+        toast.success('Invoice generated!');
         fetchOrderDetails();
       } else {
         toast.error(data.message || 'Failed to generate invoice');
@@ -332,7 +389,7 @@ const OrderManager = () => {
     const phone = order.customerPhone.replace(/^\+91/, '').replace(/\s/g, '');
     const invoiceUrl = `${window.location.origin}/api/invoices/${order.invoice}/download`;
     const message = encodeURIComponent(
-      `Hi ${order.customerName}!\n\nYour invoice for Order *${order.orderNumber}* is ready.\n\nTotal Amount: ₹${order.totalAmount}\n\nDownload Invoice: ${invoiceUrl}\n\nThank you!\nSachin Foods\n9539387240, 9388808825`
+      `Hi ${order.customerName}!\n\nYour invoice for Order *${order.orderNumber}* is ready.\n\nTotal: ₹${order.totalAmount}\nPaid: ₹${order.advancePayment || 0}\nBalance: ₹${order.remainingAmount || 0}\n\nDownload: ${invoiceUrl}\n\nThank you!\nSachin Foods\n9539387240`
     );
     window.open(`https://wa.me/91${phone}?text=${message}`, '_blank');
   };
@@ -340,14 +397,14 @@ const OrderManager = () => {
   const sendInvoiceSMS = async () => {
     setShowConfirmModal({
       title: 'Send Invoice via SMS',
-      message: 'Send invoice download link to customer via SMS?',
+      message: 'Send invoice link to customer?',
       onConfirm: async () => {
         const loadingToast = toast.loading('Sending SMS...');
         try {
           const token = getToken();
           const invoiceUrl = `${window.location.origin}/api/invoices/${order.invoice}/download`;
 
-          const response = await fetch('/api/sms/send-invoice', {
+          await fetch('/api/sms/send-invoice', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -362,18 +419,11 @@ const OrderManager = () => {
             }),
           });
 
-          const data = await response.json();
           toast.dismiss(loadingToast);
-
-          if (data.success) {
-            toast.success('Invoice SMS sent successfully!');
-          } else {
-            toast.error(data.message || 'Failed to send SMS');
-          }
+          toast.success('Invoice SMS sent!');
         } catch (err) {
           toast.dismiss(loadingToast);
-          toast.error('Error sending SMS');
-          console.error('SMS Error:', err);
+          toast.error('Failed to send SMS');
         }
       },
     });
@@ -414,21 +464,29 @@ const OrderManager = () => {
     return (
       <div className="p-6 text-center">
         <p className="text-2xl text-red-600">Order not found</p>
-        <button onClick={() => navigate('/admin/orders')} className="mt-4 px-6 py-3 bg-red-600 text-white rounded-lg">
+        <button
+          onClick={() => navigate('/admin/orders')}
+          className="mt-4 px-6 py-3 bg-red-600 text-white rounded-lg"
+        >
           Back to Orders
         </button>
       </div>
     );
 
   const nextStatuses = ['preparing', 'ready', 'delivered'];
+  const hasBalance = order.remainingAmount > 0;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {/* Confirmation Modal */}
+      {/* Modals */}
       {showConfirmModal && (
-        <ConfirmModal
-          {...showConfirmModal}
-          onClose={() => setShowConfirmModal(null)}
+        <ConfirmModal {...showConfirmModal} onClose={() => setShowConfirmModal(null)} />
+      )}
+      {showPaymentModal && (
+        <PaymentModal
+          order={order}
+          onClose={() => setShowPaymentModal(false)}
+          onSuccess={handlePaymentSuccess}
         />
       )}
 
@@ -443,7 +501,11 @@ const OrderManager = () => {
         </button>
 
         {isAdmin && ['delivered', 'cancelled'].includes(order.orderStatus) && (
-          <button onClick={deleteOrder} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Delete">
+          <button
+            onClick={deleteOrder}
+            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+            title="Delete"
+          >
             <Trash2 size={20} />
           </button>
         )}
@@ -459,7 +521,11 @@ const OrderManager = () => {
               Placed: {formatDate(order.createdAt)}
             </p>
           </div>
-          <span className={`px-4 py-2 rounded-lg font-semibold uppercase ${getStatusColor(order.orderStatus)}`}>
+          <span
+            className={`px-4 py-2 rounded-lg font-semibold uppercase ${getStatusColor(
+              order.orderStatus
+            )}`}
+          >
             {order.orderStatus}
           </span>
         </div>
@@ -474,9 +540,13 @@ const OrderManager = () => {
             </p>
           </div>
           <div>
-            <p className="text-sm text-gray-600">Delivery</p>
+            <p className="text-sm text-gray-600">Pickup Time</p>
             <p className="font-semibold text-red-600">{formatDate(order.orderDateTime)}</p>
-            {order.isFutureOrder && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded ml-2">Future</span>}
+            {order.isFutureOrder && (
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded ml-2">
+                Future Order
+              </span>
+            )}
           </div>
         </div>
 
@@ -484,7 +554,7 @@ const OrderManager = () => {
           <div className="border-t pt-6 mt-6">
             <p className="text-sm text-gray-600 flex items-center gap-2 mb-2">
               <MapPin size={16} className="text-red-600" />
-              Delivery Address
+              Pickup Location
             </p>
             <p className="font-medium">
               {order.deliveryAddress.street}, {order.deliveryAddress.city}
@@ -495,14 +565,16 @@ const OrderManager = () => {
         )}
       </div>
 
-      {/* Items & Total */}
+      {/* Items & Payment */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-bold mb-4">Order Items</h2>
         {order.orderItems.map((item, i) => (
           <div key={i} className="flex justify-between py-3 border-b last:border-0">
             <div>
               <p className="font-semibold">{item.name}</p>
-              <p className="text-sm text-gray-600">₹{item.price} × {item.quantity}</p>
+              <p className="text-sm text-gray-600">
+                ₹{item.price} × {item.quantity}
+              </p>
             </div>
             <p className="font-bold">₹{item.subtotal}</p>
           </div>
@@ -515,7 +587,9 @@ const OrderManager = () => {
           </div>
           <div className="flex justify-between text-sm">
             <span>Advance Paid</span>
-            <span className="text-green-600">₹{order.advancePayment || 0}</span>
+            <span className="text-green-600 font-semibold">
+              ₹{order.advancePayment || 0}
+            </span>
           </div>
           <div className="flex justify-between text-sm font-semibold">
             <span>Balance Due</span>
@@ -523,19 +597,39 @@ const OrderManager = () => {
           </div>
           <div className="flex justify-between items-center pt-4 border-t">
             <span className="text-sm font-medium">Payment Status</span>
-            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-              order.paymentStatus === 'completed' ? 'bg-green-100 text-green-700' :
-              order.paymentStatus === 'partial' ? 'bg-orange-100 text-orange-700' :
-              order.paymentStatus === 'pending' ? 'bg-red-100 text-red-700' :
-              'bg-gray-100 text-gray-700'
-            }`}>
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                order.paymentStatus === 'completed'
+                  ? 'bg-green-100 text-green-700'
+                  : order.paymentStatus === 'partial'
+                  ? 'bg-orange-100 text-orange-700'
+                  : order.paymentStatus === 'pending'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-gray-100 text-gray-700'
+              }`}
+            >
               {order.paymentStatus}
             </span>
           </div>
         </div>
-      </div>
 
-      {/* Admin Actions */}
+        {/* Payment Button - Show if balance exists */}
+        {hasBalance && !['cancelled', 'denied'].includes(order.orderStatus) && (
+          <div className="mt-6 pt-6 border-t">
+            <button
+              onClick={() => setShowPaymentModal(true)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-lg hover:from-green-700 hover:to-blue-700 font-bold shadow-lg"
+            >
+              <CreditCard size={20} />
+              Collect Payment (₹{order.remainingAmount})
+            </button>
+            <p className="text-xs text-gray-500 text-center mt-2">
+              Accept advance or full payment via Razorpay
+            </p>
+          </div>
+        )}
+      </div>
+       {/* Admin Actions */}
       {isAdmin && (
         <>
           {order.orderStatus === 'pending' && (
@@ -572,7 +666,9 @@ const OrderManager = () => {
                     onClick={() => updateOrderStatus(status)}
                     disabled={updating || order.orderStatus === status}
                     className={`px-5 py-2.5 rounded-lg capitalize font-medium ${
-                      order.orderStatus === status ? 'bg-red-600 text-white' : 'bg-gray-100 hover:bg-gray-200'
+                      order.orderStatus === status
+                        ? 'bg-red-600 text-white'
+                        : 'bg-gray-100 hover:bg-gray-200'
                     } disabled:opacity-50`}
                   >
                     {status}
@@ -582,7 +678,6 @@ const OrderManager = () => {
             </div>
           )}
 
-          {/* Payment Status Management */}
           {!['cancelled', 'denied'].includes(order.orderStatus) && (
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
               <h2 className="text-xl font-bold mb-4">Payment Management</h2>
@@ -593,8 +688,8 @@ const OrderManager = () => {
                     onClick={() => updatePaymentStatus(status)}
                     disabled={order.paymentStatus === status}
                     className={`px-5 py-2.5 rounded-lg capitalize font-medium ${
-                      order.paymentStatus === status 
-                        ? 'bg-green-600 text-white' 
+                      order.paymentStatus === status
+                        ? 'bg-green-600 text-white'
                         : 'bg-gray-100 hover:bg-gray-200'
                     } disabled:opacity-50`}
                   >
@@ -602,11 +697,6 @@ const OrderManager = () => {
                   </button>
                 ))}
               </div>
-              <p className="text-sm text-gray-600 mt-3">
-                Current: <span className="font-semibold">{order.paymentStatus}</span> | 
-                Advance: ₹{order.advancePayment || 0} | 
-                Balance: ₹{order.remainingAmount || 0}
-              </p>
             </div>
           )}
         </>
@@ -683,7 +773,9 @@ const OrderManager = () => {
   );
 };
 
+// ============================================
 // Confirmation Modal Component
+// ============================================
 const ConfirmModal = ({ title, message, onConfirm, onClose, requiresInput, inputPlaceholder, isDangerous }) => {
   const [inputValue, setInputValue] = useState('');
 

@@ -33,8 +33,8 @@ const HeroSection = () => {
       <div className="absolute top-0 right-0 w-96 h-96 bg-red-200 rounded-full blur-3xl opacity-20"></div>
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-yellow-200 rounded-full blur-3xl opacity-20"></div>
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 lg:py-16">
-        <div className="grid lg:grid-cols-2 gap-12 items-start">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 lg:py-16">
+          <div className="grid lg:grid-cols-2 gap-12 items-start">
           {/* LEFT CONTENT */}
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-md">

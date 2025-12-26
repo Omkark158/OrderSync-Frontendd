@@ -1,14 +1,14 @@
-// src/components/auth/Signup.jsx
+// ============================================
+// src/components/auth/Signup.jsx - USING API SERVICE
+// ============================================
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { User, Phone, ArrowRight } from 'lucide-react';
 import OTPVerification from './OTPVerification';
 import { toast } from 'react-hot-toast';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import api from '../../services/api';
 
 const Signup = () => {
-  const navigate = useNavigate();
   const [formData, setFormData] = useState({ name: '', phone: '' });
   const [loading, setLoading] = useState(false);
   const [showOTP, setShowOTP] = useState(false);
@@ -39,25 +39,21 @@ const Signup = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
+      // ✅ Using api service
+      const response = await api.post('/auth/signup', formData);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || 'Signup failed');
-        toast.error(data.message || 'Signup failed');
-        return;
+      if (response.data.success) {
+        setShowOTP(true);
+        toast.success('OTP sent! Check your phone 📱');
+      } else {
+        setError(response.data.message || 'Signup failed');
+        toast.error(response.data.message || 'Signup failed');
       }
-
-      setShowOTP(true);
-      toast.success('OTP sent! Check your phone 📱');
     } catch (err) {
-      setError('Network error');
-      toast.error('Network error. Try again.');
+      console.error('Signup error:', err);
+      const errorMsg = err.response?.data?.message || 'Network error. Try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -65,42 +61,49 @@ const Signup = () => {
 
   const handleVerifyOTP = async (otp) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/verify-signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: formData.phone, otp }),
+      // ✅ Using api service
+      const response = await api.post('/auth/verify-signup', {
+        phone: formData.phone,
+        otp,
       });
 
-      const data = await response.json();
+      if (response.data.success) {
+        console.log('✅ Signup successful:', response.data.user);
+        
+        // Store user data
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
 
-      if (!response.ok) {
-        toast.error(data.message || 'Invalid OTP');
-        return;
+        toast.success('Account created! Welcome! 🎉', { duration: 2000 });
+        
+        // ✅ Force page reload to refresh AuthContext
+        setTimeout(() => {
+          window.location.href = '/menu';
+        }, 500);
+      } else {
+        toast.error(response.data.message || 'Invalid OTP');
       }
-
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-
-      toast.success('Account created! Welcome! 🎉');
-      navigate('/menu');
     } catch (err) {
-      toast.error('Verification failed');
+      console.error('Verification error:', err);
+      toast.error(err.response?.data?.message || 'Verification failed');
     }
   };
 
   const handleResendOTP = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/resend-signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: formData.phone }),
+      // ✅ Using api service
+      const response = await api.post('/auth/resend-signup', {
+        phone: formData.phone,
       });
 
-      const data = await response.json();
-
-      data.success ? toast.success('OTP resent!') : toast.error(data.message || 'Failed');
+      if (response.data.success) {
+        toast.success('OTP resent!');
+      } else {
+        toast.error(response.data.message || 'Failed to resend');
+      }
     } catch (err) {
-      toast.error('Failed to resend');
+      console.error('Resend error:', err);
+      toast.error(err.response?.data?.message || 'Failed to resend');
     }
   };
 

@@ -1,4 +1,6 @@
-// src/components/auth/Login.jsx
+// ============================================
+// src/components/auth/Login.jsx - FINAL WORKING VERSION
+// ============================================
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Phone, ArrowRight } from 'lucide-react';
@@ -28,6 +30,7 @@ const Login = () => {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // ✅ Enable cookies
         body: JSON.stringify({ phone }),
       });
 
@@ -54,6 +57,7 @@ const Login = () => {
       const response = await fetch(`${API_BASE_URL}/auth/verify-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // ✅ Enable cookies
         body: JSON.stringify({ phone, otp }),
       });
 
@@ -64,12 +68,21 @@ const Login = () => {
         return;
       }
 
+      // ✅ Store token and user data
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
 
+      console.log('✅ Login successful:', data.user);
+
       toast.success('Login successful! Welcome back! 🎉');
-      navigate('/menu');
+      
+      // ✅ Force page reload to refresh AuthContext
+      setTimeout(() => {
+        window.location.href = '/menu';
+      }, 500);
+      
     } catch (err) {
+      console.error('Verification error:', err);
       toast.error('Verification failed. Try again.');
     }
   };
@@ -79,6 +92,7 @@ const Login = () => {
       const response = await fetch(`${API_BASE_URL}/auth/resend-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // ✅ Enable cookies
         body: JSON.stringify({ phone }),
       });
 

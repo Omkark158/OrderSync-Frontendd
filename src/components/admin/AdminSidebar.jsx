@@ -1,5 +1,5 @@
 // ============================================
-// 1. AdminSidebar.jsx
+// components/admin/AdminSidebar.jsx - WITH PROFILE
 // ============================================
 import { Link, useLocation } from 'react-router-dom';
 import { 
@@ -7,6 +7,7 @@ import {
   ShoppingBag, 
   UtensilsCrossed, 
   FileText, 
+  User,
   LogOut 
 } from 'lucide-react';
 
@@ -18,6 +19,7 @@ const AdminSidebar = ({ onLogout }) => {
     { path: '/admin/orders', icon: ShoppingBag, label: 'Orders' },
     { path: '/admin/menu', icon: UtensilsCrossed, label: 'Menu' },
     { path: '/admin/invoices', icon: FileText, label: 'Invoices' },
+    { path: '/admin/profile', icon: User, label: 'Profile' }, // ✅ ADDED
   ];
 
   const isActive = (path) => location.pathname === path;

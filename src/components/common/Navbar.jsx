@@ -1,7 +1,10 @@
-// components/common/Navbar.jsx - Conditional navbar based on login
+// ============================================
+// components/common/Navbar.jsx - FULLY FIXED
+// ============================================
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingCart, User, Menu as MenuIcon, X, LogOut, Package } from 'lucide-react';
+import { ShoppingCart, User, Menu as MenuIcon, X, LogOut } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -12,27 +15,23 @@ const Navbar = () => {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Check if user is logged in
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      try {
-        setUser(JSON.parse(userData));
-      } catch (error) {
-        console.error('Invalid user data');
-      }
-    }
-
-    // Get cart count from localStorage
-    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    setCartCount(cart.reduce((sum, item) => sum + item.quantity, 0));
+    loadUserData();
+    updateCartCount();
 
     // Listen for cart updates
     const handleCartUpdate = () => {
-      const updatedCart = JSON.parse(localStorage.getItem('cart') || '[]');
-      setCartCount(updatedCart.reduce((sum, item) => sum + item.quantity, 0));
+      updateCartCount();
+    };
+
+    // Listen for storage changes (for logout across tabs)
+    const handleStorageChange = (e) => {
+      if (e.key === 'user' || e.key === 'adminUser' || e.key === 'token' || e.key === 'adminToken') {
+        loadUserData();
+      }
     };
 
     window.addEventListener('cartUpdated', handleCartUpdate);
+    window.addEventListener('storage', handleStorageChange);
 
     // Handle scroll effect
     const handleScroll = () => {
@@ -44,14 +43,72 @@ const Navbar = () => {
     return () => {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('cartUpdated', handleCartUpdate);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, [location]);
 
+  // ✅ Load user data based on current route
+  const loadUserData = () => {
+    try {
+      const isAdminRoute = location.pathname.startsWith('/admin');
+      
+      if (isAdminRoute) {
+        // Load admin user
+        const adminUser = localStorage.getItem('adminUser');
+        if (adminUser) {
+          const parsed = JSON.parse(adminUser);
+          console.log('📍 Navbar: Admin user loaded:', parsed.name);
+          setUser(parsed);
+        } else {
+          setUser(null);
+        }
+      } else {
+        // Load regular user
+        const regularUser = localStorage.getItem('user');
+        if (regularUser) {
+          const parsed = JSON.parse(regularUser);
+          console.log('📍 Navbar: Regular user loaded:', parsed.name);
+          setUser(parsed);
+        } else {
+          setUser(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      setUser(null);
+    }
+  };
+
+  // ✅ Update cart count
+  const updateCartCount = () => {
+    const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+    setCartCount(cart.reduce((sum, item) => sum + item.quantity, 0));
+  };
+
+  // ✅ Handle logout
   const handleLogout = () => {
+    console.log('🚪 Navbar: Logging out user:', user?.role);
+    
+    const wasAdmin = user?.role === 'admin';
+    
+    // Clear all auth data
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUser');
+    localStorage.removeItem('cart');
+    
     setUser(null);
-    navigate('/login');
+    setCartCount(0);
+    
+    // Navigate based on previous role
+    if (wasAdmin) {
+      navigate('/admin/secure-access', { replace: true });
+      toast.success('Admin logged out successfully');
+    } else {
+      navigate('/login', { replace: true });
+      toast.success('Logged out successfully');
+    }
   };
 
   const isActive = (path) => location.pathname === path;
@@ -62,6 +119,14 @@ const Navbar = () => {
     { path: '/orders', label: 'My Orders' },
   ];
 
+  // ✅ Don't show admin routes in regular navbar
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  
+  // ✅ If admin route, don't render regular navbar
+  if (isAdminRoute) {
+    return null;
+  }
+
   // ✅ If not logged in on home page, show minimal navbar
   if (!user && location.pathname === '/') {
     return (
@@ -70,7 +135,6 @@ const Navbar = () => {
       }`}>
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
-            {/* Logo Only */}
             <Link to="/" className="flex items-center gap-2">
               <div className="bg-red-600 text-white p-2 rounded-lg">
                 <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -80,7 +144,6 @@ const Navbar = () => {
               <span className="text-xl font-bold text-gray-900">Sachin Foods</span>
             </Link>
 
-            {/* Login/Signup Buttons */}
             <div className="flex items-center gap-3">
               <Link
                 to="/login"
@@ -110,7 +173,6 @@ const Navbar = () => {
     >
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
             <div className="bg-red-600 text-white p-2 rounded-lg">
               <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">

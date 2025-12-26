@@ -1,8 +1,10 @@
 // ============================================
-// AuthContext.jsx - Fixed with Admin Support
+// context/AuthContext.jsx - FINAL ULTIMATE VERSION
 // ============================================
 import { createContext, useContext, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import api from '../services/api';
 
 const AuthContext = createContext();
 
@@ -19,278 +21,240 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Load user data from localStorage on mount
+  // ============================================
+  // INITIALIZATION - Load user from localStorage
+  // ============================================
   useEffect(() => {
-    console.log('🔄 Loading auth state...');
-    
-    // ✅ Check for admin first, then regular user
-    const adminToken = localStorage.getItem('adminToken');
-    const adminUser = localStorage.getItem('adminUser');
-    
-    if (adminToken && adminUser) {
-      try {
-        const parsedAdmin = JSON.parse(adminUser);
-        console.log('✅ Admin user loaded:', parsedAdmin);
-        setToken(adminToken);
-        setUser(parsedAdmin);
-        setLoading(false);
-        return;
-      } catch (error) {
-        console.error('❌ Error parsing admin data:', error);
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminUser');
-      }
-    }
-    
-    // Check for regular user
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-
-    if (storedToken && storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        console.log('✅ Regular user loaded:', parsedUser);
-        setToken(storedToken);
-        setUser(parsedUser);
-      } catch (error) {
-        console.error('❌ Error parsing user data:', error);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-      }
-    }
-    
-    setLoading(false);
+    console.log('🔄 AuthContext: Initializing...');
+    loadAuthState();
   }, []);
 
-  // Login function (regular users)
-  const login = async (phone) => {
+  // Load auth state from localStorage
+  const loadAuthState = () => {
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        return { success: true, message: 'OTP sent successfully' };
+      const isAdminRoute = location.pathname.startsWith('/admin');
+      
+      if (isAdminRoute) {
+        // Load admin credentials
+        const adminToken = localStorage.getItem('adminToken');
+        const adminUser = localStorage.getItem('adminUser');
+        
+        if (adminToken && adminUser) {
+          const parsedAdmin = JSON.parse(adminUser);
+          console.log('✅ Admin loaded:', parsedAdmin.email);
+          setToken(adminToken);
+          setUser(parsedAdmin);
+        }
       } else {
-        return { success: false, message: data.message || 'Login failed' };
+        // Load regular user credentials
+        const storedToken = localStorage.getItem('token');
+        const storedUser = localStorage.getItem('user');
+        
+        if (storedToken && storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          console.log('✅ User loaded:', parsedUser.name);
+          setToken(storedToken);
+          setUser(parsedUser);
+        }
       }
     } catch (error) {
-      console.error('Login error:', error);
-      return { success: false, message: 'Network error. Please try again.' };
+      console.error('❌ Error loading auth state:', error);
+      clearAllAuth();
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Verify OTP and complete login
-  const verifyLoginOTP = async (phone, otp) => {
-    try {
-      const response = await fetch('/api/auth/verify-login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone, otp }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setToken(data.token);
-        setUser(data.user);
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        return { success: true, user: data.user };
-      } else {
-        return { success: false, message: data.message || 'Invalid OTP' };
-      }
-    } catch (error) {
-      console.error('OTP verification error:', error);
-      return { success: false, message: 'Verification failed' };
-    }
-  };
-
-  // Signup function
-  const signup = async (name, phone) => {
-    try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name, phone }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        return { success: true, message: 'OTP sent successfully' };
-      } else {
-        return { success: false, message: data.message || 'Signup failed' };
-      }
-    } catch (error) {
-      console.error('Signup error:', error);
-      return { success: false, message: 'Network error. Please try again.' };
-    }
-  };
-
-  // Verify signup OTP
-  const verifySignupOTP = async (phone, otp) => {
-    try {
-      const response = await fetch('/api/auth/verify-signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone, otp }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setToken(data.token);
-        setUser(data.user);
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        return { success: true, user: data.user };
-      } else {
-        return { success: false, message: data.message || 'Invalid OTP' };
-      }
-    } catch (error) {
-      console.error('OTP verification error:', error);
-      return { success: false, message: 'Verification failed' };
-    }
-  };
-
-  // Resend OTP
-  const resendOTP = async (phone, type = 'login') => {
-    try {
-      const endpoint = type === 'login' ? '/api/auth/resend-login' : '/api/auth/resend-signup';
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        return { success: true, message: 'OTP resent successfully' };
-      } else {
-        return { success: false, message: data.message || 'Failed to resend OTP' };
-      }
-    } catch (error) {
-      console.error('Resend OTP error:', error);
-      return { success: false, message: 'Failed to resend OTP' };
-    }
-  };
-
-  // Logout function
-  const logout = () => {
-    console.log('🚪 Logging out...');
+  // ============================================
+  // HELPER FUNCTIONS
+  // ============================================
+  
+  // Clear all authentication data
+  const clearAllAuth = () => {
+    console.log('🧹 Clearing all auth data');
     setUser(null);
     setToken(null);
-    
-    // Clear all tokens
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminUser');
     localStorage.removeItem('cart');
-    
-    // Navigate based on current user type
-    if (user?.role === 'admin') {
-      navigate('/admin/secure-access');
-    } else {
-      navigate('/login');
-    }
   };
 
-  // Get current user profile
+  // ============================================
+  // USER MANAGEMENT
+  // ============================================
+  
+  // Get current user from API
   const getCurrentUser = async () => {
+    if (!token) {
+      console.log('⚠️ No token available for getCurrentUser');
+      return { success: false, message: 'No token available' };
+    }
+
     try {
-      const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      console.log('📡 Fetching current user from API...');
+      const response = await api.get('/auth/me');
 
-      const data = await response.json();
-
-      if (data.success) {
-        setUser(data.user);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        return { success: true, user: data.user };
+      if (response.data.success) {
+        const apiUser = response.data.user;
+        console.log('✅ User fetched:', apiUser.name || apiUser.email);
+        
+        setUser(apiUser);
+        
+        // Update correct storage based on role
+        if (apiUser.role === 'admin') {
+          localStorage.setItem('adminUser', JSON.stringify(apiUser));
+        } else {
+          localStorage.setItem('user', JSON.stringify(apiUser));
+        }
+        
+        // Notify other components (navbar, profile, etc.)
+        window.dispatchEvent(new Event('userUpdated'));
+        
+        return { success: true, user: apiUser };
       } else {
-        return { success: false, message: data.message };
+        console.log('⚠️ API returned unsuccessful response');
+        return { success: false, message: response.data.message };
       }
     } catch (error) {
-      console.error('Get user error:', error);
+      console.error('❌ Get user error:', error);
+      
+      if (error.response?.status === 401) {
+        console.log('🔐 Session expired (401)');
+        clearAllAuth();
+        navigate('/login', { replace: true });
+        toast.error('Session expired. Please login again.');
+      }
+      
       return { success: false, message: 'Failed to fetch user data' };
     }
   };
 
   // Update user profile
   const updateProfile = async (updateData) => {
+    if (!token) {
+      return { success: false, message: 'No token available' };
+    }
+
     try {
-      const response = await fetch('/api/users/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(updateData),
-      });
+      console.log('📡 Updating profile...');
+      const response = await api.put('/users/profile', updateData);
 
-      const data = await response.json();
-
-      if (data.success) {
-        setUser(data.data);
-        localStorage.setItem('user', JSON.stringify(data.data));
-        return { success: true, user: data.data };
+      if (response.data.success) {
+        const updatedUser = response.data.data;
+        console.log('✅ Profile updated:', updatedUser.name);
+        
+        setUser(updatedUser);
+        
+        // Update correct storage based on role
+        if (updatedUser.role === 'admin') {
+          localStorage.setItem('adminUser', JSON.stringify(updatedUser));
+        } else {
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+        
+        // Notify navbar to update name
+        window.dispatchEvent(new Event('userUpdated'));
+        
+        return { success: true, user: updatedUser };
       } else {
-        return { success: false, message: data.message };
+        return { success: false, message: response.data.message };
       }
     } catch (error) {
-      console.error('Update profile error:', error);
-      return { success: false, message: 'Failed to update profile' };
+      console.error('❌ Update profile error:', error);
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Failed to update profile' 
+      };
     }
   };
 
+  // ============================================
+  // AUTHENTICATION CHECKS
+  // ============================================
+  
   // Check if user is authenticated
   const isAuthenticated = () => {
-    return !!token && !!user;
+    // Check both state and localStorage for reliability
+    const hasToken = !!token || 
+                     !!localStorage.getItem('token') || 
+                     !!localStorage.getItem('adminToken');
+    
+    const hasUser = !!user || 
+                    !!localStorage.getItem('user') || 
+                    !!localStorage.getItem('adminUser');
+    
+    const authenticated = hasToken && hasUser;
+    
+    if (!authenticated) {
+      console.log('⚠️ User not authenticated');
+    }
+    
+    return authenticated;
   };
 
   // Check if user is admin
   const isAdmin = () => {
-    return user?.role === 'admin';
+    const adminStatus = user?.role === 'admin';
+    return adminStatus;
   };
 
+  // ============================================
+  // LOGOUT
+  // ============================================
+  
+  const logout = async () => {
+    console.log('🚪 Logging out:', user?.role || 'unknown user');
+    
+    const wasAdmin = user?.role === 'admin';
+    
+    try {
+      // Call backend logout to clear cookies
+      await api.post('/auth/logout');
+      console.log('✅ Backend logout successful');
+    } catch (error) {
+      console.error('⚠️ Logout API error (continuing anyway):', error);
+    }
+    
+    // Clear all local data
+    clearAllAuth();
+    
+    // Navigate based on previous role
+    if (wasAdmin) {
+      navigate('/admin/secure-access', { replace: true });
+      toast.success('Admin logged out successfully');
+    } else {
+      navigate('/login', { replace: true });
+      toast.success('Logged out successfully');
+    }
+  };
+
+  // ============================================
+  // CONTEXT VALUE
+  // ============================================
+  
   const value = {
+    // State
     user,
     token,
     loading,
-    login,
-    verifyLoginOTP,
-    signup,
-    verifySignupOTP,
-    resendOTP,
-    logout,
+    
+    // Functions
     getCurrentUser,
     updateProfile,
+    logout,
     isAuthenticated,
     isAdmin,
   };
 
-  // ✅ Show loading screen while checking auth
+  // ============================================
+  // RENDER
+  // ============================================
+  
+  // Show loading screen while checking auth
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -302,7 +266,11 @@ export const AuthProvider = ({ children }) => {
     );
   }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export default AuthContext;
